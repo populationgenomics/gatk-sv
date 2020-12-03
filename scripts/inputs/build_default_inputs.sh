@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 function usage() {
   printf "Usage: \n \
     %s -d <REPO_BASE_DIR> \n \
