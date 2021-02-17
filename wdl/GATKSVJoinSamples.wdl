@@ -7,17 +7,15 @@ import "GATKSVDepth.wdl" as gatksv_depth
 
 workflow GATKSVJoinSamples {
   input {
-    Array[File] vcfs
     String batch
     Array[String] samples
-    Array[File] counts
-    Array[File] cnmops_files
 
+    File sv_vcf
     File sr_file
     File pe_file
+    Array[File] counts
     File sample_mean_depth_file
     File sample_median_count_file
-    File contig_list
     File ploidy_calls_tar
 
     # Filtering options
@@ -56,9 +54,11 @@ workflow GATKSVJoinSamples {
     String depth_train_device = 'cpu'
     String depth_infer_device = 'cpu'
 
+    File contig_list
     File ref_fasta_dict
     File ref_fasta_fai
     File ref_fasta
+
     String linux_docker
     String sv_base_mini_docker
     String sv_base_docker
@@ -82,33 +82,13 @@ workflow GATKSVJoinSamples {
     RuntimeAttr? runtime_attr_infer
     }
 
-  scatter (i in range(length(vcfs))) {
-    File vcf_indexes_ = vcfs[i] + ".tbi"
-  }
-
-  scatter (i in range(length(cnmops_files))) {
-    File cnmops_file_indexes_ = cnmops_files[i] + ".tbi"
-  }
-
   File sr_index_ = sr_file + ".tbi"
   File pe_index_ = pe_file + ".tbi"
 
-  call MergeSVCalls {
-    input:
-      vcfs = vcfs,
-      vcf_indexes = vcf_indexes_,
-      cnmops_files = cnmops_files,
-      cnmops_file_indexes = cnmops_file_indexes_,
-      batch = batch,
-      ref_fasta_dict = ref_fasta_dict,
-      gatk_docker = gatk_docker,
-      runtime_attr_override = runtime_attr_merge
-  }
-
   call FilterVariants {
     input:
-      vcf = MergeSVCalls.out,
-      vcf_index = MergeSVCalls.out_index,
+      vcf = sv_vcf,
+      vcf_index = sv_vcf + ".tbi",
       inclusion_intervals_depth_only = inclusion_intervals_depth_only,
       exclusion_intervals_depth_only = exclusion_intervals_depth_only,
       min_size_depth_only = min_size_depth_only,
@@ -397,194 +377,6 @@ task ClusterVariants {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task MergeSVCalls {
-  input {
-    Array[File] vcfs
-    Array[File] vcf_indexes
-    Array[File] cnmops_files
-    Array[File] cnmops_file_indexes
-    File ref_fasta_dict
-    String batch
-    String gatk_path = "/gatk/gatk"
-    String gatk_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 7.5,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
-
-  output {
-    File out = "~{batch}.merged.vcf.gz"
-    File out_index = "~{batch}.merged.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-
-    # Create arguments file
-    touch args.txt
-    while read line; do
-      echo "--cnmops $line" >> args.txt
-    done < ~{write_lines(cnmops_files)}
-
-    while read line; do
-      echo "-V $line" >> args.txt
-    done < ~{write_lines(vcfs)}
-
-    ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" MergeSVCalls \
-      --arguments_file args.txt \
-      --sequence-dictionary ~{ref_fasta_dict} \
-      --output ~{batch}.merged.vcf.gz \
-      --ignore-dict
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: mem_gb + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: gatk_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task MergeVcfs {
-  input {
-    Array[File] vcfs
-    Array[File] vcf_indexes
-    String output_name
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_name}"
-    File out_index = "~{output_name}.tbi"
-  }
-  command <<<
-
-    set -euo pipefail
-    bcftools merge --file-list ~{write_lines(vcfs)} -o ~{output_name} --output-type z
-    tabix ~{output_name}
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task ShardVcf {
-  input {
-    File pesr_vcf
-    Int records_per_shard
-    String sv_pipeline_base_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Array[String] svtypes = ["DEL", "DUP", "INV", "INS"]
-  Array[String] bnd_strands = ["++", "+-", "-+", "--"]
-  Array[String] bnd_strand_labels = ["plus_plus", "plus_minus", "minus_plus", "minus_minus"]
-
-  output {
-    Array[File] out = glob("*.shard_*.vcf.gz")
-  }
-  command <<<
-
-    set -euo pipefail
-    sgrep() { grep "$@" || test $? = 1; }
-    NAME=$(basename ~{pesr_vcf} .vcf.gz)
-    SVTYPES=(~{sep=" " svtypes})
-    zcat ~{pesr_vcf} | grep ^# > header
-    for svtype in ${SVTYPES[@]}; do
-      zcat ~{pesr_vcf} | grep -v ^# | sgrep -w "<${svtype}>" > records
-      NUM_RECORDS=$(cat records | wc -l)
-      if [ "${NUM_RECORDS}" -gt "0" ]; then
-        CHUNKS=$(python -c "from math import ceil; print(ceil($NUM_RECORDS/float(~{records_per_shard})))")
-        split -a9 -d -n l/$CHUNKS records records.shard_
-        i=0
-        for chunk in records.shard_*; do
-          padded=`printf %09d $i`
-          cat header $chunk | bgzip -c > $NAME.${svtype}.shard_${padded}.vcf.gz
-          i=$((i+1))
-        done
-        rm records records.shard_*
-      else
-        echo "No records of type ${svtype} found"
-      fi
-    done
-
-    # Handle BNDs separately
-    STRANDS=(~{sep=" " bnd_strands})
-    STRAND_STR=(~{sep=" " bnd_strand_labels})
-    svtype="BND"
-    num_strand_types=${#STRANDS[*]}
-    for (( j=0; j<=$(( $num_strand_types -1 )); j++ )); do
-      strand=${STRANDS[$j]}
-      strand_str=${STRAND_STR[$j]}
-      zcat ~{pesr_vcf} | grep -v ^# | sgrep -w "<${svtype}>" | sgrep "STRANDS=${strand}" > records
-      NUM_RECORDS=$(cat records | wc -l)
-      if [ "${NUM_RECORDS}" -gt "0" ]; then
-        CHUNKS=$(python -c "from math import ceil; print(ceil($NUM_RECORDS/float(~{records_per_shard})))")
-        split -a9 -d -n l/$CHUNKS records records.shard_
-        i=0
-        for chunk in records.shard_*; do
-          padded=`printf %09d $i`
-          cat header $chunk | bgzip -c > $NAME.${svtype}.${strand_str}.shard_${padded}.vcf.gz
-          i=$((i+1))
-        done
-        rm records records.shard_*
-      else
-        echo "No records of type ${svtype} found"
-      fi
-    done
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

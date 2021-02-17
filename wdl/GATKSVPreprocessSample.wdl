@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as t0506
 
 workflow GATKSVPreprocessSample {
   input {
@@ -22,7 +21,7 @@ workflow GATKSVPreprocessSample {
     File ref_fasta_fai
 
     # Docker
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
 
     # VM resource options
     RuntimeAttr? runtime_attr_override
@@ -50,7 +49,7 @@ workflow GATKSVPreprocessSample {
       gcnv_min_qs = gcnv_min_qs,
       min_svsize = min_svsize,
       ref_fasta_fai = ref_fasta_fai,
-      sv_pipeline_docker = sv_pipeline_docker,
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
       runtime_attr_override = runtime_attr_override
   }
 
@@ -71,7 +70,7 @@ task StandardizeVcfs {
     Int gcnv_min_qs
     Int min_svsize
     File ref_fasta_fai
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -213,7 +212,7 @@ task StandardizeVcfs {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
