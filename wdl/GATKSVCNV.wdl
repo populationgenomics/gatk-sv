@@ -263,7 +263,7 @@ task MergeSampleCnmops {
     zcat ~{sep=" " cnmops_beds} | awk -F "\t" -v OFS="\t" '{if ($5=="~{sample_id}") print}' > cnmops.cnv
     sort -k1,1V -k2,2n cnmops.cnv > ~{sample_id}.unmerged.bed
     bedtools merge -i ~{sample_id}.unmerged.bed -d 0 -c 4,5,6,7 -o distinct > ~{sample_id}.merged.bed
-    sort -k1,1V -k2,2n ~{sample_id}.merged.bed > ~{sample_id}.merged.sorted.bed
+    sort -k1,1V -k2,2n ~{sample_id}.merged.bed >~{sample_id}.cnmops.bed
     bgzip ~{sample_id}.cnmops.bed
     tabix -p bed ~{sample_id}.cnmops.bed.gz
 
