@@ -5,6 +5,7 @@ import "CNMOPS.wdl" as cnmops
 import "CollectCoverage.wdl" as cov
 import "MakeBincovMatrix.wdl" as mbm
 import "GermlineCNVCase.wdl" as gcnv
+import "MedianCov.wdl" as mc
 
 workflow GATKSVCNV {
   input {
@@ -74,12 +75,15 @@ workflow GATKSVCNV {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     String linux_docker
     String condense_counts_docker
     String gatk_docker
     String cnmops_docker
 
     RuntimeAttr? evidence_merging_bincov_runtime_attr
+    RuntimeAttr? median_cov_runtime_attr
+    Float? median_cov_mem_gb_per_sample
     RuntimeAttr? cnmops_sample10_runtime_attr   # Memory ignored if cnmops_mem_gb_override_sample10 given
     RuntimeAttr? cnmops_sample3_runtime_attr    # Memory ignored if cnmops_mem_gb_override_sample3 given
     Float? cnmops_mem_gb_override_sample10
@@ -105,6 +109,22 @@ workflow GATKSVCNV {
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = evidence_merging_bincov_runtime_attr
+  }
+
+  Float median_cov_mem_gb_ = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(samples) + 7.5
+  call mc.MedianCov {
+    input:
+      bincov_matrix = MakeBincovMatrix.merged_bincov,
+      cohort_id = batch,
+      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      runtime_attr = median_cov_runtime_attr,
+      mem_gb_override = median_cov_mem_gb_
+  }
+
+  Map[String, String] medcov_map_ = read_map(MedianCov.medianCov)
+  scatter (i in range(length(samples))) {
+    String sample = samples[i]
+    Int sample_medcov_ = medcov_map_[sample]
   }
 
   call cnmops.CNMOPS as CNMOPSSmall {
@@ -229,6 +249,7 @@ workflow GATKSVCNV {
   }
 
   output {
+    Array[Int] sample_medcov = sample_medcov_
     Array[File] cnmops_beds = MergeSampleCnmops.out
     Array[File] cnmops_bed_indexes = MergeSampleCnmops.out_index
     Array[File] gcnv_segments_vcfs = CNVGermlineCaseWorkflow.genotyped_segments_vcf
