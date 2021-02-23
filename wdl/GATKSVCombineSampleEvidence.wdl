@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "BatchEvidenceMerging.wdl" as bem
-import "MatrixQC.wdl" as mqc
+import "MakeBincovMatrix.wdl" as mbm
 
 workflow GATKSVCombineSampleEvidence {
   input {
@@ -10,10 +10,11 @@ workflow GATKSVCombineSampleEvidence {
     String batch
     Array[String] samples
 
-    # Sample SV VCFs
-    Array[File]? vcfs
+    # Preprocessed sample SV VCFs
+    Array[File] vcfs
 
     # PE/SR files
+    Array[File] counts
     Array[File] pe_files
     Array[File] sr_files
     File inclusion_bed
@@ -23,12 +24,9 @@ workflow GATKSVCombineSampleEvidence {
     File genome_file
     File ref_fasta_dict
 
-    # Optional QC tasks
-    Boolean run_matrix_qc
-    Int matrix_qc_distance
-
     # Runtime parameters
     String sv_base_mini_docker
+    String sv_base_docker
     String sv_pipeline_docker
     String gatk_docker
 
@@ -38,15 +36,14 @@ workflow GATKSVCombineSampleEvidence {
     RuntimeAttr? runtime_attr_shard_sr
     RuntimeAttr? runtime_attr_merge_sr
     RuntimeAttr? runtime_attr_set_sample
-    RuntimeAttr? matrix_qc_pesrbaf_runtime_attr
-    RuntimeAttr? matrix_qc_rd_runtime_attr
+    RuntimeAttr? runtime_attr_override_make_bincov
   }
 
   scatter (i in range(length(vcfs))) {
     File vcf_indexes_ = vcfs[i] + ".tbi"
   }
 
-  call MergeSVRecords {
+  call SVPreprocessRecords {
     input:
       vcfs = vcfs,
       vcf_indexes = vcf_indexes_,
@@ -55,7 +52,17 @@ workflow GATKSVCombineSampleEvidence {
       runtime_attr_override = runtime_attr_merge_sv
   }
 
-  call bem.EvidenceMerging as EvidenceMerging {
+  call mbm.MakeBincovMatrix {
+    input:
+      samples = samples,
+      count_files = counts,
+      batch = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      sv_base_docker = sv_base_docker,
+      runtime_attr_override = runtime_attr_override_make_bincov
+  }
+
+  call bem.EvidenceMerging {
     input:
       samples = samples,
       PE_files = pe_files,
@@ -71,40 +78,20 @@ workflow GATKSVCombineSampleEvidence {
       runtime_attr_merge_sr = runtime_attr_merge_sr
   }
 
-  if (run_matrix_qc) {
-    call mqc.MatrixQC as MatrixQC {
-      input:
-        distance = matrix_qc_distance,
-        genome_file = genome_file,
-        batch = batch,
-        PE_file = EvidenceMerging.merged_PE,
-        PE_idx = EvidenceMerging.merged_PE_idx,
-        SR_file = EvidenceMerging.merged_SR,
-        SR_idx = EvidenceMerging.merged_SR_idx,
-        ref_dict = ref_fasta_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_pesrbaf = matrix_qc_pesrbaf_runtime_attr,
-        runtime_attr_rd = matrix_qc_rd_runtime_attr
-    }
-  }
-
   output {
-    File merged_sv_vcf = MergeSVRecords.out
-    File merged_sv_vcf_index = MergeSVRecords.out
+    File merged_sv_vcf = SVPreprocessRecords.out
+    File merged_sv_vcf_index = SVPreprocessRecords.out
 
+    File merged_rd = MakeBincovMatrix.merged_bincov
+    File merged_rd_index = MakeBincovMatrix.merged_bincov_idx
     File merged_sr = EvidenceMerging.merged_SR
     File merged_sr_index = EvidenceMerging.merged_SR_idx
     File merged_pe = EvidenceMerging.merged_PE
     File merged_pe_index = EvidenceMerging.merged_PE_idx
-
-    File? pe_stats = MatrixQC.PE_stats
-    File? rd_stats = MatrixQC.RD_stats
-    File? sr_stats = MatrixQC.SR_stats
-    File? matrix_qc_plot = MatrixQC.QC_plot
   }
 }
 
-task MergeSVRecords {
+task SVPreprocessRecords {
   input {
     Array[File] vcfs
     Array[File] vcf_indexes
@@ -140,7 +127,7 @@ task MergeSVRecords {
       echo "-V $line" >> args.txt
     done < ~{write_lines(vcfs)}
 
-    ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" MergeSVRecords \
+    ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" SVPreprocessRecords \
       --arguments_file args.txt \
       --output ~{batch}.merged.vcf.gz \
       --disable-sequence-dictionary-validation

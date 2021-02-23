@@ -9,7 +9,7 @@ workflow GATKSVPreprocessSample {
     File? manta_vcf
     File? melt_vcf
     File? wham_vcf
-    Array[File] cnv_beds
+    File cnv_bed
     # Note this will not work on gCNV VCFs generated with GATK < v4.1.5.0 ! Use cnv_beds instead
     File? gcnv_segments_vcf
 
@@ -44,7 +44,7 @@ workflow GATKSVPreprocessSample {
       algorithms = sv_algorithms_,
       sample = sample_id,
       gcnv_segments_vcf = gcnv_segments_vcf,
-      cnv_beds = cnv_beds,
+      cnv_bed = cnv_bed,
       output_basename = "~{sample_id}.preprocess_sample",
       gcnv_min_qs = gcnv_min_qs,
       min_svsize = min_svsize,
@@ -64,7 +64,7 @@ task StandardizeVcfs {
     Array[File] vcfs
     Array[String] algorithms
     File? gcnv_segments_vcf
-    Array[File] cnv_beds
+    File? cnv_bed
     String sample
     String output_basename
     Int gcnv_min_qs
@@ -174,11 +174,10 @@ task StandardizeVcfs {
     # Convert bed files into a standardized VCF
     ############################################################
 
-    beds=(~{sep=" " cnv_beds})
-    if ~{length(cnv_beds) > 0}; then
+    if ~{defined(cnv_bed)}; then
       echo "~{sample}" > samples.list
       # filter, concat, and header a combined bed
-      zcat ~{sep=" " cnv_beds} \
+      zcat ~{cnv_bed} \
         | awk -F "\t" -v OFS="\t" '{if ($5=="~{sample}") print}' \
         | grep -v ^# \
         | sort -k1,1V -k2,2n \

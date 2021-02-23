@@ -162,7 +162,8 @@ workflow GATKSVCNV {
     call MergeSampleCnmops {
       input:
         sample_id = samples[i],
-        cnmops_beds = [CNMOPSSmall.Del, CNMOPSSmall.Dup, CNMOPSLarge.Del, CNMOPSLarge.Dup],
+        cnmops_del_beds = [CNMOPSSmall.Del, CNMOPSLarge.Del],
+        cnmops_dup_beds = [CNMOPSSmall.Dup, CNMOPSLarge.Dup],
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_merge_sample
     }
@@ -237,7 +238,8 @@ workflow GATKSVCNV {
 
 task MergeSampleCnmops {
   input {
-    Array[File] cnmops_beds
+    Array[File] cnmops_del_beds
+    Array[File] cnmops_dup_beds
     String sample_id
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -260,10 +262,21 @@ task MergeSampleCnmops {
   command <<<
 
     set -euo pipefail
-    zcat ~{sep=" " cnmops_beds} | awk -F "\t" -v OFS="\t" '{if ($5=="~{sample_id}") print}' > cnmops.cnv
-    sort -k1,1V -k2,2n cnmops.cnv > ~{sample_id}.unmerged.bed
-    bedtools merge -i ~{sample_id}.unmerged.bed -d 0 -c 4,5,6,7 -o distinct > ~{sample_id}.merged.bed
-    sort -k1,1V -k2,2n ~{sample_id}.merged.bed >~{sample_id}.cnmops.bed
+
+    # Merge DEL and DUP separately
+    zcat ~{sep=" " cnmops_del_beds} | awk -F "\t" -v OFS="\t" '{if ($5=="~{sample_id}") print}' \
+      | sort -k1,1V -k2,2n \
+      | bedtools merge -i stdin -d 0 -c 4,5,6,7 -o distinct \
+      > ~{sample_id}.del.bed
+    zcat ~{sep=" " cnmops_dup_beds} | awk -F "\t" -v OFS="\t" '{if ($5=="~{sample_id}") print}' \
+      | sort -k1,1V -k2,2n \
+      | bedtools merge -i stdin -d 0 -c 4,5,6,7 -o distinct \
+      > ~{sample_id}.dup.bed
+
+    cat ~{sample_id}.del.bed ~{sample_id}.dup.bed \
+      | sort -k1,1V -k2,2n \
+      > ~{sample_id}.cnmops.bed
+
     bgzip ~{sample_id}.cnmops.bed
     tabix -p bed ~{sample_id}.cnmops.bed.gz
 

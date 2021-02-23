@@ -4,6 +4,7 @@ import "CollectCoverage.wdl" as cov
 import "GATKSVGenotype.wdl" as svg
 import "GermlineCNVTasks.wdl" as gcnv_tasks
 import "GATKSVDepth.wdl" as gatksv_depth
+import "MakeBincovMatrix.wdl" as mbm
 
 workflow GATKSVJoinSamples {
   input {
