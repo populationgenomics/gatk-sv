@@ -15,9 +15,9 @@ workflow GATKSVJoinSamples {
     File sr_file
     File pe_file
     Array[File] counts
+    Array[File] ploidy_calls
     File sample_mean_depth_file
     File sample_median_count_file
-    File ploidy_calls_tar
 
     # Filtering options
     File? inclusion_intervals_depth_only
@@ -70,6 +70,7 @@ workflow GATKSVJoinSamples {
 
     RuntimeAttr? runtime_attr_merge
     RuntimeAttr? runtime_attr_filter_depth
+    RuntimeAttr?runtime_attr_tar_ploidy_calls
     RuntimeAttr? runtime_attr_concat
     RuntimeAttr? runtime_attr_small_intervals
     RuntimeAttr? runtime_attr_intersect_intervals
@@ -86,14 +87,10 @@ workflow GATKSVJoinSamples {
   File sr_index_ = sr_file + ".tbi"
   File pe_index_ = pe_file + ".tbi"
 
-  call FilterVariants {
+  call FilterVariants as FilterNonDepthVariants {
     input:
       vcf = sv_vcf,
       vcf_index = sv_vcf + ".tbi",
-      inclusion_intervals_depth_only = inclusion_intervals_depth_only,
-      exclusion_intervals_depth_only = exclusion_intervals_depth_only,
-      min_size_depth_only = min_size_depth_only,
-      min_overlap_fraction_depth_only = min_overlap_fraction_depth_only,
       require_breakend_overlap_depth_only = require_breakend_overlap_depth_only,
       min_size_non_depth_only = min_size_non_depth_only,
       min_overlap_fraction_non_depth_only = min_overlap_fraction_non_depth_only,
@@ -110,8 +107,8 @@ workflow GATKSVJoinSamples {
   scatter (contig in contigs) {
     call ClusterVariants {
       input:
-        vcf = FilterVariants.out,
-        vcf_index = FilterVariants.out_index,
+        vcf = FilterNonDepthVariants.out,
+        vcf_index = FilterNonDepthVariants.out_index,
         vid_prefix = "SV_" + contig + "_",
         contig = contig,
         sr_file = sr_file,
@@ -136,15 +133,42 @@ workflow GATKSVJoinSamples {
       runtime_attr_override = runtime_attr_concat
   }
 
+  call FilterVariants as FilterDepthVariants {
+    input:
+      vcf = ConcatVcfs.out,
+      vcf_index = ConcatVcfs.out_index,
+      inclusion_intervals_depth_only = inclusion_intervals_depth_only,
+      exclusion_intervals_depth_only = exclusion_intervals_depth_only,
+      min_size_depth_only = min_size_depth_only,
+      min_overlap_fraction_depth_only = min_overlap_fraction_depth_only,
+      require_breakend_overlap_depth_only = require_breakend_overlap_depth_only,
+      min_size_non_depth_only = min_size_non_depth_only,
+      min_overlap_fraction_non_depth_only = min_overlap_fraction_non_depth_only,
+      require_breakend_overlap_non_depth_only = require_breakend_overlap_non_depth_only,
+      inclusion_intervals_non_depth_only = inclusion_intervals_non_depth_only,
+      exclusion_intervals_non_depth_only = exclusion_intervals_non_depth_only,
+      basename = batch,
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_filter_depth
+  }
+
+  call TarFiles as TarPloidyCalls {
+    input:
+      files = ploidy_calls,
+      name = "~{batch}.ploidy_calls",
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_tar_ploidy_calls
+  }
+
   call gatksv_depth.GATKSVDepth as DepthLarge {
     input:
       batch = batch,
       cnv_size_name = "large_cnv",
-      vcf = ConcatVcfs.out,
+      vcf = FilterDepthVariants.out,
       samples = samples,
       counts = counts,
       sample_median_count_file = sample_median_count_file,
-      ploidy_calls_tar = ploidy_calls_tar,
+      ploidy_calls_tar = TarPloidyCalls.out,
       condense_num_bins = large_cnv_condense_num_bins,
       condense_bin_size = large_cnv_condense_bin_size,
       include_depth_only = true,
@@ -181,11 +205,11 @@ workflow GATKSVJoinSamples {
     input:
       batch = batch,
       cnv_size_name = "small_cnv",
-      vcf = ConcatVcfs.out,
+      vcf = FilterDepthVariants.out,
       samples = samples,
       counts = counts,
       sample_median_count_file = sample_median_count_file,
-      ploidy_calls_tar = ploidy_calls_tar,
+      ploidy_calls_tar = TarPloidyCalls.out,
       condense_num_bins = small_cnv_condense_num_bins,
       condense_bin_size = small_cnv_condense_bin_size,
       include_depth_only = false,
@@ -223,11 +247,11 @@ workflow GATKSVJoinSamples {
 
   call AggregateDepth {
     input:
-      vcf = ConcatVcfs.out,
-      vcf_index = ConcatVcfs.out_index,
+      vcf = FilterDepthVariants.out,
+      vcf_index = FilterDepthVariants.out_index,
       depth_posterior_vcfs = [DepthLarge.out, DepthSmall.out],
       depth_posterior_vcfs_indexes = [DepthLarge.out_index, DepthSmall.out_index],
-      ploidy_calls_tar = ploidy_calls_tar,
+      ploidy_calls_tar = TarPloidyCalls.out,
       ref_fasta_dict = ref_fasta_dict,
       batch = batch,
       gatk_docker = gatk_docker,
@@ -284,9 +308,17 @@ task AggregateDepth {
   command <<<
     set -euo pipefail
 
+    # Extract ploidy call tarballs
     mkdir ploidy-calls
     tar xzf ~{ploidy_calls_tar} -C ploidy-calls
-    ls ploidy-calls/SAMPLE_*/contig_ploidy.tsv > ploidy_files.list
+    cd ploidy-calls/
+    for file in *.tar.gz; do
+      name=$(basename $file .tar.gz)
+      mkdir $name
+      tar xzf $file -C $name/
+    done
+    cd ../
+    ls ploidy-calls/*/contig_ploidy.tsv > ploidy_files.list
 
     # Create arguments file
     echo "--cnv-intervals-vcf ~{sep=" --cnv-intervals-vcf " depth_posterior_vcfs}" > args.txt
@@ -390,14 +422,14 @@ task FilterVariants {
 
     File? inclusion_intervals_depth_only
     File? exclusion_intervals_depth_only
-    Int min_size_depth_only
-    Float min_overlap_fraction_depth_only
+    Int? min_size_depth_only
+    Float? min_overlap_fraction_depth_only
     Boolean require_breakend_overlap_depth_only
 
     File? inclusion_intervals_non_depth_only
     File? exclusion_intervals_non_depth_only
-    Int min_size_non_depth_only
-    Float min_overlap_fraction_non_depth_only
+    Int? min_size_non_depth_only
+    Float? min_overlap_fraction_non_depth_only
     Boolean require_breakend_overlap_non_depth_only
 
     String basename
@@ -431,8 +463,8 @@ task FilterVariants {
       --depth-only \
       ~{"-L " + inclusion_intervals_depth_only} \
       ~{"-XL " + exclusion_intervals_depth_only} \
-      --min-size ~{min_size_depth_only} \
-      --min-overlap-fraction ~{min_overlap_fraction_depth_only} \
+      ~{"--min-size " + min_size_depth_only} \
+      ~{"--min-overlap-fraction " + min_overlap_fraction_depth_only} \
       ~{if require_breakend_overlap_depth_only then "--require-breakend-overlap" else ""}
 
     gatk --java-options -Xmx~{java_mem_mb}M SVSelectVariants \
@@ -441,16 +473,14 @@ task FilterVariants {
       --non-depth-only \
       ~{"-L " + inclusion_intervals_non_depth_only} \
       ~{"-XL " + exclusion_intervals_non_depth_only} \
-      --min-size ~{min_size_non_depth_only} \
-      --min-overlap-fraction ~{min_overlap_fraction_non_depth_only} \
+      ~{"--min-size " + min_size_non_depth_only} \
+      ~{"--min-overlap-fraction " + min_overlap_fraction_non_depth_only} \
       ~{if require_breakend_overlap_non_depth_only then "--require-breakend-overlap" else ""}
 
-    bcftools concat \
-      --allow-overlaps \
-      ~{basename}.depth_filtered.vcf.gz ~{basename}.non_depth_filtered.vcf.gz \
-      | bgzip > ~{basename}.filtered.vcf.gz
-    tabix ~{basename}.filtered.vcf.gz
-
+    gatk --java-options -Xmx~{java_mem_mb}M MergeVcfs \
+      -I ~{basename}.depth_filtered.vcf.gz \
+      -I ~{basename}.non_depth_filtered.vcf.gz \
+      -O ~{basename}.filtered.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -458,6 +488,40 @@ task FilterVariants {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task TarFiles {
+  input {
+    Array[File] files
+    String name
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{name}.tar.gz"
+  }
+  command <<<
+    tar czf ~{name}.tar.gz ~{sep=" " files}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

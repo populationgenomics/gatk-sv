@@ -121,12 +121,6 @@ workflow GATKSVCNV {
       mem_gb_override = median_cov_mem_gb_
   }
 
-  Map[String, String] medcov_map_ = read_map(MedianCov.medianCov)
-  scatter (i in range(length(samples))) {
-    String sample = samples[i]
-    Int sample_medcov_ = medcov_map_[sample]
-  }
-
   call cnmops.CNMOPS as CNMOPSSmall {
     input:
       r1 = "3",
@@ -249,7 +243,7 @@ workflow GATKSVCNV {
   }
 
   output {
-    Array[Int] sample_medcov = sample_medcov_
+    File medcov = MedianCov.medianCov
     Array[File] cnmops_beds = MergeSampleCnmops.out
     Array[File] cnmops_bed_indexes = MergeSampleCnmops.out_index
     Array[File] gcnv_segments_vcfs = CNVGermlineCaseWorkflow.genotyped_segments_vcf

@@ -288,9 +288,17 @@ task SVTrainDepth {
   command <<<
     set -euo pipefail
 
+    # Extract ploidy call tarballs
     mkdir ploidy-calls
     tar xzf ~{ploidy_calls_tar} -C ploidy-calls
-    ls ploidy-calls/SAMPLE_*/contig_ploidy.tsv > ploidy_files.list
+    cd ploidy-calls/
+    for file in *.tar.gz; do
+      name=$(basename $file .tar.gz)
+      mkdir $name
+      tar xzf $file -C $name/
+    done
+    cd ../
+    ls ploidy-calls/*/contig_ploidy.tsv > ploidy_files.list
 
     # Create arguments file
     while read line; do
