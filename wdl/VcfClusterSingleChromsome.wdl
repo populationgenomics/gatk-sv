@@ -36,7 +36,10 @@ workflow VcfClusterSingleChrom {
     String sv_base_mini_docker
 
     # overrides for local tasks
+    RuntimeAttr? runtime_override_localize_vcfs
     RuntimeAttr? runtime_override_join_vcfs
+    RuntimeAttr? runtime_override_fix_multiallelic
+    RuntimeAttr? runtime_override_fix_ev_tags
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_subset_bothside_pass
@@ -52,20 +55,45 @@ workflow VcfClusterSingleChrom {
   }
   
   #Stream each vcf & join into a single vcf
-  call JoinContigFromRemoteVcfs as JoinVcfs {
+  call LocalizeContigVcfs {
     input:
       vcfs=vcfs,
       batches=batches,
       contig=contig,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_localize_vcfs
+  }
+  call JoinVcfs {
+    input:
+      vcfs=LocalizeContigVcfs.out,
+      contig=contig,
+      prefix=prefix,
+      sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_join_vcfs
+  }
+  call FixMultiallelicRecords {
+    input:
+      joined_vcf=JoinVcfs.out,
+      batch_contig_vcfs=LocalizeContigVcfs.out,
+      contig=contig,
+      prefix=prefix,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_fix_multiallelic
+  }
+  call FixEvidenceTags {
+    input:
+      vcf=FixMultiallelicRecords.out,
+      contig=contig,
+      prefix=prefix,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_fix_ev_tags
   }
 
   #Run vcfcluster per chromosome
   call VcfClusterTasks.ClusterSingleChrom as ClusterSingleChrom {
     input:
-      vcf=JoinVcfs.joined_vcf,
+      vcf=FixEvidenceTags.out,
       contig=contig,
       prefix=prefix,
       max_shards=max_shards_per_chrom_svtype,
@@ -93,7 +121,7 @@ workflow VcfClusterSingleChrom {
     call MiniTasks.SubsetVariantList as SubsetBothsidePass {
       input:
         vid_list=bothside_pass,
-        vcf=JoinVcfs.joined_vcf,
+        vcf=FixEvidenceTags.out,
         outfile_name=prefix + "." + contig + ".pass.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_bothside_pass
@@ -101,7 +129,7 @@ workflow VcfClusterSingleChrom {
     call MiniTasks.SubsetVariantList as SubsetBackgroundFail {
       input:
         vid_list=background_fail,
-        vcf=JoinVcfs.joined_vcf,
+        vcf=FixEvidenceTags.out,
         outfile_name=prefix + "." + contig + ".fail.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_background_fail
@@ -117,8 +145,8 @@ workflow VcfClusterSingleChrom {
 }
 
 
-# Task to stream a single chromosome for all VCFs, then merge row-wise
-task JoinContigFromRemoteVcfs {
+# Shard batch VCFs, pulling down only this contig
+task LocalizeContigVcfs {
   input {
     Array[File] vcfs
     Array[String] batches
@@ -134,15 +162,12 @@ task JoinContigFromRemoteVcfs {
     }
   }
 
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcfs, "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float input_size_fraction = 0.1  # Max possible fraction of total VCF we are pulling down
+  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 1.0,
+    disk_gb: ceil(base_disk_gb + input_size * input_size_fraction),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -150,12 +175,9 @@ task JoinContigFromRemoteVcfs {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
-  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
-
   runtime {
-    memory: mem_gb + " GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+  disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -164,93 +186,198 @@ task JoinContigFromRemoteVcfs {
   }
   
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
 
     # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
     # https://github.com/broadinstitute/gatk-sv/issues/52
 
-    #Remote tabix all vcfs to chromosome of interest
-    1>&2 echo "REMOTE TABIXING VCFs"
-
     # needed for tabix to operate on remote files
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
+    #Remote tabix all vcfs to chromosome of interest
     paste ~{write_lines(batches)} ~{write_lines(vcfs)} | while read BATCH VCF_PATH; do
-      1>&2 echo "BATCH=$BATCH"
-      1>&2 echo "VCF_PATH=$VCF_PATH"
-      if gsutil ls "$VCF_PATH*" | grep -q '\.tbi$' || false; then
-        INDEX_PRESENT=1
-      else
-        INDEX_PRESENT=0
-      fi
-      if [ $INDEX_PRESENT == 1 ]; then
-        1>&2 echo "Found index: $VCF_PATH.tbi"
-        TABIX_VCF="$VCF_PATH"
-        1>&2 echo "USING $TABIX_VCF"
-      else
-        1>&2 echo -e "WARNING: no index file for $VCF_PATH\n\tlocalizing and indexing"
-        TABIX_VCF=$(basename "$VCF_PATH")
-        1>&2 echo "Using $TABIX_VCF"
-        gsutil -m cp "$VCF_PATH" .
-        tabix -p vcf "$TABIX_VCF"
-      fi
-      BATCH_VCF="$BATCH.~{contig}.vcf"
-      BATCH_VCF=${BATCH_VCF//[[:space:]]/_}
-      tabix -h "$TABIX_VCF" "~{contig}:0-300000000"|sed "s/AN=[0-9]*;//g"|sed "s/AC=[0-9]*;//g" > "$BATCH_VCF"
-      bgzip -f "$BATCH_VCF"
-      if [ $INDEX_PRESENT == 0 ]; then
-        rm $TABIX_VCF
-      fi
-
-      # echo and pipe batch vcf name to subsetted_vcfs.list, and echo to stderr for debugging purposes
-      echo "$BATCH_VCF.gz"
-      1>&2 echo "Made $BATCH_VCF.gz"
-    done > subsetted_vcfs.list
-
-    1>&2 echo "SANITY CHECK"
+      BATCH_VCF="$BATCH.~{contig}.subsetted.vcf.gz"
+      tabix -h "$VCF_PATH" "~{contig}" \
+        | sed "s/AN=[0-9]*;//g" \
+        | sed "s/AC=[0-9]*;//g" \
+        | bgzip \
+        > $BATCH_VCF
+    done
+    VCFS_LIST="subsetted_vcfs.list"
+    ls *.~{contig}.subsetted.vcf.gz > $VCFS_LIST
 
     #Sanity check to make sure all subsetted VCFs have same number of records
     # crazy ' || printf ""' statement to avoid pipefail if grep encounters no matching lines
     while read VCF; do
       zcat "$VCF" | (grep -Ev "^#" || printf "") | wc -l
-    done < subsetted_vcfs.list \
-      > records_per_vcf.txt
+    done < $VCFS_LIST \
+    > records_per_vcf.txt
 
     if [ $( sort records_per_vcf.txt | uniq | wc -l ) -gt 1 ]; then
       1>&2 echo "ERROR: INCONSISTENT NUMBER OF RECORDS PER VCF DETECTED"
       cat records_per_vcf.txt
       exit 1
     fi
+  >>>
 
-    1>&2 echo "CALL join_vcfs_paste_implementation.sh"
+  output {
+    Array[File] out = glob("*.~{contig}.vcf.gz")
+  }
+}
 
-    #Join vcfs
-    /opt/sv-pipeline/04_variant_resolution/scripts/join_vcfs_paste_implementation.sh \
-      subsetted_vcfs.list "~{prefix}.joined"
+# Merge contig vcfs across batches
+task JoinVcfs {
+  input {
+    Array[File] vcfs
+    String contig
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-    # more debugging output
-    echo "FINISHED join_vcfs_parallel_implementation.sh; RESULTS:"
-    find . -name "~{prefix}.joined.vcf*"
+  Float input_size = size(vcfs, "GiB")
+  Float input_size_ratio = 3.0
+  Float base_disk_gb = 10.0
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 1.0,
+                                  disk_gb: ceil(base_disk_gb + input_size * input_size_ratio),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
+  runtime {
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    VCFS_LIST="~{write_lines(vcfs)}"
+    JOINED_VCF="~{prefix}.~{contig}.joined.vcf.gz"
+    BASE=$(head -n1 $VCFS_LIST)
+    zcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
+
+    # Paste final line of header (samples) and VCF records together
+    cmd="paste <(zcat $BASE | sed -e '/^##/d')"
+    while read vcf; do
+      cmd="$cmd <(zcat $vcf | sed -e '/^##/d' | cut -f 10-)"
+    done < <(sed '1d' $VCFS_LIST)
+    eval "$cmd" | bgzip >> $JOINED_VCF
+    tabix $JOINED_VCF
+  >>>
+
+  output {
+    File out = "~{prefix}.~{contig}.joined.vcf.gz"
+    File out_index = "~{prefix}.~{contig}.joined.vcf.gz.tbi"
+  }
+}
+
+# Add in max CN state to multiallelics
+task FixMultiallelicRecords {
+  input {
+    File joined_vcf
+    Array[File] batch_contig_vcfs
+    String contig
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(joined_vcf, "GiB") * 2 + size(batch_contig_vcfs, "GiB")
+  Float input_size_fraction = 1.0
+  Float base_disk_gb = 10.0
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 1.0,
+                                  disk_gb: ceil(base_disk_gb + input_size * input_size_fraction),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
     /opt/sv-pipeline/04_variant_resolution/scripts/make_concordant_multiallelic_alts.py \
-      $( find . -name "~{prefix}.joined.vcf.gz" ) \
-      subsetted_vcfs.list \
-      ~{prefix}.unclustered.vcf
+      ~{joined_vcf} \
+      ~{write_lines(batch_contig_vcfs)} \
+      ~{prefix}.~{contig}.fixed_multiallelics.vcf.gz
+    tabix ~{prefix}.~{contig}.fixed_multiallelics.vcf.gz
+  >>>
 
-    cat ~{prefix}.unclustered.vcf \
+  output {
+    File out = "~{prefix}.~{contig}.fixed_multiallelics.vcf.gz"
+    File out_index = "~{prefix}.~{contig}.fixed_multiallelics.vcf.gz.tbi"
+  }
+}
+
+# Convert EV field from String to Integer
+task FixEvidenceTags {
+  input {
+    File vcf
+    String contig
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GiB")
+  Float input_size_ratio = 2.0
+  Float base_disk_gb = 10.0
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 1.0,
+                                  disk_gb: ceil(base_disk_gb + input_size * input_size_ratio),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    zcat ~{vcf} \
       | sed -e 's/:RD,PE,SR/:7/g' \
       | sed -e 's/:PE,SR/:6/g' \
       | sed -e 's/:RD,SR/:5/g' \
       | sed -e 's/:RD,PE/:3/g' \
       | sed -e 's/:PE\t/:2\t/g' -e 's/:SR\t/:4\t/g' -e 's/:RD\t/:1\t/g' \
       | sed -e 's/ID=EV,Number=.,Type=String/ID=EV,Number=1,Type=Integer/g' \
-      | bgzip -c > ~{prefix}.unclustered.vcf.gz
-
-    tabix -p vcf "~{prefix}.unclustered.vcf.gz"
+      | bgzip \
+      > ~{prefix}.~{contig}.unclustered.vcf.gz
+    tabix ~{prefix}.~{contig}.unclustered.vcf.gz
   >>>
 
   output {
-    File joined_vcf = "~{prefix}.unclustered.vcf.gz"
-    File joined_vcf_idx = "~{prefix}.unclustered.vcf.gz.tbi"
+    File out = "~{prefix}.~{contig}.unclustered.vcf"
+    File out_index = "~{prefix}.~{contig}.unclustered.vcf.tbi"
   }
 }

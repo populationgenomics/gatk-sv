@@ -21,7 +21,6 @@ workflow ResolveComplexSv {
     File cytobands
     File mei_bed
     Array[File] disc_files
-    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
     File pe_exclude_list
     Boolean inv_only
@@ -44,6 +43,9 @@ workflow ResolveComplexSv {
   File vcf_idx = vcf + ".tbi"
   File pe_exclude_list_idx = pe_exclude_list + ".tbi"
   File cytobands_idx = cytobands + ".tbi"
+  scatter (i in range(length(disc_files))) {
+    File disc_files_idx = disc_files[i]
+  }
 
   # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
 
@@ -81,7 +83,7 @@ workflow ResolveComplexSv {
           VIDs_list=VID_list,
           chrom=contig,
           disc_files=disc_files,
-          disc_files_index=disc_files_index,
+          disc_files_index=disc_files_idx,
           ref_dict=ref_dict,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_prep

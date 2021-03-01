@@ -270,7 +270,6 @@ workflow Module0506 {
       complex_resolve_background_fail_lists=Module0506ComplexResolve.complex_resolve_background_fail_lists,
       merged_ped_file=ped_file,
       contig_list=contig_list,
-      max_shards_per_chrom=max_shards_per_chrom,
       max_shards_per_chrom_clean_vcf_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=min_records_per_shard_clean_vcf_step1,
       samples_per_clean_vcf_step2_shard=samples_per_clean_vcf_step2_shard,

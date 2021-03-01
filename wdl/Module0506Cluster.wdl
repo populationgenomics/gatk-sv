@@ -38,7 +38,10 @@ workflow Module0506Cluster {
     RuntimeAttr? runtime_override_concat
 
     # overrides for VcfClusterContig
+    RuntimeAttr? runtime_override_localize_vcfs
     RuntimeAttr? runtime_override_join_vcfs
+    RuntimeAttr? runtime_override_fix_multiallelic
+    RuntimeAttr? runtime_override_fix_ev_tags
     RuntimeAttr? runtime_override_subset_bothside_pass
     RuntimeAttr? runtime_override_subset_background_fail
     RuntimeAttr? runtime_override_subset_sv_type
@@ -99,7 +102,10 @@ workflow Module0506Cluster {
         empty_file=empty_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_override_join_vcfs=runtime_override_join_vcfs,
+      runtime_override_localize_vcfs = runtime_override_localize_vcfs,
+      runtime_override_join_vcfs = runtime_override_join_vcfs,
+      runtime_override_fix_multiallelic = runtime_override_fix_multiallelic,
+      runtime_override_fix_ev_tags = runtime_override_fix_ev_tags,
         runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
         runtime_override_subset_background_fail=runtime_override_subset_background_fail,
         runtime_override_subset_sv_type=runtime_override_subset_sv_type,
@@ -131,7 +137,10 @@ workflow Module0506Cluster {
         empty_file=empty_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_override_join_vcfs=runtime_override_join_vcfs,
+        runtime_override_localize_vcfs = runtime_override_localize_vcfs,
+        runtime_override_join_vcfs = runtime_override_join_vcfs,
+        runtime_override_fix_multiallelic = runtime_override_fix_multiallelic,
+        runtime_override_fix_ev_tags = runtime_override_fix_ev_tags,
         runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
         runtime_override_subset_background_fail=runtime_override_subset_background_fail,
         runtime_override_subset_sv_type=runtime_override_subset_sv_type,
