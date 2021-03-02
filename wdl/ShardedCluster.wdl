@@ -27,7 +27,7 @@ workflow ShardedCluster {
     File? exclude_list
     Int sv_size
     Array[String] sv_types
-    Int unmerged_clusters_shard_size
+    Int unmerged_clusters_shard_size = 1000
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -85,7 +85,7 @@ workflow ShardedCluster {
         exclude_list=exclude_list,
         exclude_list_idx=exclude_list_idx,
         svsize=sv_size,
-        shard_size=unmerged_clusters_shard_size,
+        records_per_shard=unmerged_clusters_shard_size,
         sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_cluster
@@ -244,7 +244,7 @@ task SvtkVcfCluster {
     File? exclude_list_idx
     Int svsize
     Array[String] sv_types
-    Int shard_size
+    Int records_per_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -349,7 +349,7 @@ task SvtkVcfCluster {
             for record in current_cluster:
               fout.write(record.encode('utf-8'))
             current_shard_size += len(current_cluster)
-            if current_shard_size >= ~{shard_size}:
+            if current_shard_size >= ~{records_per_shard}:
               current_shard += 1
               current_shard_size = 0
               fout.close()
