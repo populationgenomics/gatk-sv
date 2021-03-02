@@ -10,6 +10,7 @@ version 1.0
 
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
+import "ShardedClusterMerge.wdl" as scm
 
 # Workflow to shard a filtered vcf & run vcfcluster (sub-sub-sub workflow)
 workflow ShardedCluster {
@@ -26,6 +27,7 @@ workflow ShardedCluster {
     File? exclude_list
     Int sv_size
     Array[String] sv_types
+    Int unmerged_clusters_shard_size
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -37,6 +39,10 @@ workflow ShardedCluster {
     RuntimeAttr? runtime_override_shard_vcf_precluster
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
+
+    # overrides for merge subworkflow
+    RuntimeAttr? runtime_override_merge_clusters
+    RuntimeAttr? runtime_override_concat_inner_shards
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_concat_shards
@@ -79,9 +85,20 @@ workflow ShardedCluster {
         exclude_list=exclude_list,
         exclude_list_idx=exclude_list_idx,
         svsize=sv_size,
+        shard_size=unmerged_clusters_shard_size,
         sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_cluster
+    }
+    call scm.ShardedClusterMerge {
+      input:
+        vcfs = SvtkVcfCluster.out,
+        id_prefix = sv_type_prefix,
+        file_prefix = sv_type_prefix + ".vid_shard_" + i,
+        sv_pipeline_docker = sv_pipeline_docker,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_override_merge_clusters = runtime_override_merge_clusters,
+        runtime_override_concat_shards = runtime_override_concat_inner_shards,
     }
   }
   if (length(SvtkVcfCluster.clustered_vcf) == 0) {
@@ -95,8 +112,8 @@ workflow ShardedCluster {
   }
 
   #Merge shards per svtype
-  Array[File] clustered_vcfs = if length(SvtkVcfCluster.clustered_vcf) > 0 then SvtkVcfCluster.clustered_vcf else select_all([GetVcfHeaderWithMembersInfoLine.out])
-  Array[File] clustered_vcfs_idx = if length(SvtkVcfCluster.clustered_vcf) > 0 then SvtkVcfCluster.clustered_vcf_idx else select_all([GetVcfHeaderWithMembersInfoLine.out_idx])
+  Array[File] clustered_vcfs = if length(ShardedClusterMerge.clustered_vcf) > 0 then ShardedClusterMerge.clustered_vcf else select_all([GetVcfHeaderWithMembersInfoLine.out])
+  Array[File] clustered_vcfs_idx = if length(ShardedClusterMerge.clustered_vcf) > 0 then ShardedClusterMerge.clustered_vcf_idx else select_all([GetVcfHeaderWithMembersInfoLine.out_idx])
   call MiniTasks.ConcatVcfs as ConcatShards {
     input:
       vcfs=clustered_vcfs,
@@ -227,9 +244,12 @@ task SvtkVcfCluster {
     File? exclude_list_idx
     Int svsize
     Array[String] sv_types
+    Int shard_size
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
+
+  String output_prefix = "~{prefix}.shard_~{shard}.unmerged_clusters"
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
@@ -260,20 +280,32 @@ task SvtkVcfCluster {
   }
 
   command <<<
-    set -eu -o pipefail
-    
-    # Filter vcf to only include passed variant IDs
-    /opt/sv-pipeline/04_variant_resolution/scripts/filter_vcf.sh \
-      "~{vcf}" \
-      "{ fgrep -wf ~{VIDs} || true; }" \
-      input.vcf.gz
+    set -euo pipefail
 
+    python3 <<CODE | bgzip > input.vcf.gz
+    import sys
+    import gzip
+
+    with open('~{VIDs}') as f:
+      vids = set([x.strip() for x in f.readlines()])
+
+    with gzip.open('~{vcf}') as f:
+      for lineb in f:
+        line = lineb.decode()
+        if line[0] == '#':
+          sys.stdout.write(line)
+        else:
+          tok = line.split('\t', 3)
+          if tok[2] in vids:
+            sys.stdout.write(line)
+    CODE
+    tabix input.vcf.gz
 
     ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -f -p bed ~{exclude_list}" else ""}
 
     #Run clustering
     echo "input.vcf.gz" > unclustered_vcfs.list
-    svtk vcfcluster unclustered_vcfs.list clustered.vcf \
+    svtk vcfcluster unclustered_vcfs.list unmerged_clusters.vcf \
       -d ~{dist} \
       -f ~{frac} \
       ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
@@ -283,17 +315,69 @@ task SvtkVcfCluster {
       -o ~{sample_overlap} \
       --preserve-ids \
       --preserve-genotypes \
-      --preserve-header
+      --preserve-header \
+      --skip-merge
 
-    # sort and compress the vcf
-    VCF_NAME="~{prefix}-shard-~{shard}.vcf.gz"
-    mkdir temp
-    bcftools sort --temp-dir temp --max-mem ~{sort_mem_mb} --output-type z --output-file $VCF_NAME clustered.vcf
-    tabix $VCF_NAME
+    # Shard output
+    python3 <<CODE
+    import sys
+    import gzip
+    import os
+
+    header = []
+    with open('unmerged_clusters.vcf') as f:
+      current_vid = ""
+      current_cluster = []
+      current_shard = 0
+      current_shard_size = 0
+      shard_path_format = "~{output_prefix}.cluster_shard_{}.vcf.gz"
+      shard_path = shard_path_format.format(current_shard)
+      fout = gzip.open(shard_path, 'wb')
+      if fout is None:
+        raise IOError("Could not open '{}'".format(shard_path))
+        sys.exit(1)
+      for line in f:
+        if line[0] == '#':
+          fout.write(line.encode('utf-8'))
+          header.append(line)
+        else:
+          tok = line.split('\t', 3)
+          vid = tok[2]
+          if vid == current_vid:
+            current_cluster.append(line)
+          else:
+            for record in current_cluster:
+              fout.write(record.encode('utf-8'))
+            current_shard_size += len(current_cluster)
+            if current_shard_size >= ~{shard_size}:
+              current_shard += 1
+              current_shard_size = 0
+              fout.close()
+              shard_path = shard_path_format.format(current_shard)
+              fout = gzip.open(shard_path, 'wb')
+              if fout is None:
+                raise IOError("Could not open '{}'".format(shard_path))
+                sys.exit(1)
+              for hline in header:
+                fout.write(hline.encode('utf-8'))
+            current_cluster = [line]
+            current_vid = vid
+
+      # Write last cluster
+      for record in current_cluster:
+        fout.write(record.encode('utf-8'))
+      current_shard_size += len(current_cluster)
+      fout.close()
+
+      # Delete trailing empty shard
+      if current_shard > 0 and current_shard_size == 0:
+        os.remove(shard_path)
+    CODE
+
   >>>
 
   output {
-    File clustered_vcf = "~{prefix}-shard-~{shard}.vcf.gz"
-    File clustered_vcf_idx = "~{prefix}-shard-~{shard}.vcf.gz.tbi"
+    # NOT block-compressed
+    Array[File] out = glob("~{output_prefix}.cluster_shard_*.vcf.gz")
   }
 }

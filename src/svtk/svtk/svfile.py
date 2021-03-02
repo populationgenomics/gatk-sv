@@ -105,6 +105,7 @@ class SVRecord(GSNode):
 
         self.record = record
         self.sources = record.info['ALGORITHMS']
+        self.called_samples = set(get_called_samples(self.record))
 
         chrA = record.chrom
         posA = record.pos
@@ -151,8 +152,8 @@ class SVRecord(GSNode):
         # Only compute sample overlap if a minimum sample overlap is required
         # and if records are eligible to cluster
         if clusters and sample_overlap > 0:
-            samplesA = get_called_samples(self.record)
-            samplesB = get_called_samples(other.record)
+            samplesA = self.called_samples
+            samplesB = other.called_samples
             clusters = clusters and samples_overlap(samplesA, samplesB, sample_overlap, sample_overlap)
 
         return clusters
@@ -304,6 +305,10 @@ class SVRecordCluster:
 
         # List of aggregate sources
         new_record.info['ALGORITHMS'] = self.sources()
+
+        # If merging, all will have same CLUSTER ID
+        if 'CLUSTER' in base_record.record.info:
+            new_record.info['CLUSTER'] = base_record.record.info['CLUSTER']
 
         return new_record
 
