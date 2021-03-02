@@ -221,7 +221,7 @@ task LocalizeContigVcfs {
   >>>
 
   output {
-    Array[File] out = glob("*.~{contig}.vcf.gz")
+    Array[File] out = glob("*.~{contig}.subsetted.vcf.gz")
   }
 }
 
@@ -377,7 +377,7 @@ task FixEvidenceTags {
   >>>
 
   output {
-    File out = "~{prefix}.~{contig}.unclustered.vcf"
-    File out_index = "~{prefix}.~{contig}.unclustered.vcf.tbi"
+    File out = "~{prefix}.~{contig}.unclustered.vcf.gz"
+    File out_index = "~{prefix}.~{contig}.unclustered.vcf.gz.tbi"
   }
 }

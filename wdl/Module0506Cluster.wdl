@@ -57,7 +57,7 @@ workflow Module0506Cluster {
   call MiniTasks.CatUncompressedFiles as CleanBothsidePass {
     input:
       shards=raw_sr_bothside_pass_files,
-      filter_command="sort | uniq -c | awk -v OFS='\\t' '{print $1/~{num_pass_lines}, $2}'",
+      filter_command="sort -m | uniq -c | awk -v OFS='\\t' '{print $1/~{num_pass_lines}, $2}'",
       outfile_name="cohort_sr_genotyping_bothside_pass_list.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_clean_bothside_pass
@@ -68,7 +68,7 @@ workflow Module0506Cluster {
   call MiniTasks.CatUncompressedFiles as CleanBackgroundFail {
     input:
       shards=raw_sr_background_fail_files,
-      filter_command="sort | uniq -c | awk -v OFS='\\t' '{if($1 >= ~{min_background_fail_first_col}) print $2}'",
+      filter_command="sort -m | uniq -c | awk -v OFS='\\t' '{if($1 >= ~{min_background_fail_first_col}) print $2}'",
       outfile_name="cohort_sr_genotyping_background_fail_list.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_clean_background_fail
@@ -242,7 +242,7 @@ task MergePesrDepth {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size([pesr_vcf, depth_vcf], "GiB")
-  Float compression_factor_mem = 20.0
+  Float compression_factor_mem = 10.0
   Float compression_factor_disk = 15.0
   Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
@@ -266,15 +266,24 @@ task MergePesrDepth {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
 
-    /opt/sv-pipeline/04_variant_resolution/scripts/PESR_RD_merge_wrapper.sh \
-    ~{pesr_vcf} \
-    ~{depth_vcf} \
-    ~{contig} \
-    ~{output_file}
+    # Merge VCFs (doesn't merge variants)
+    bcftools concat -a --output-type z \
+      ~{pesr_vcf} ~{depth_vcf} --output pesr_depth_unmerged.~{contig}.vcf.gz
 
-    tabix -p vcf -f ~{output_file}
+    #Run merging script (merges variants)
+    /opt/sv-pipeline/04_variant_resolution/scripts/merge_pesr_depth.py \
+      --prefix pesr_depth_merged_~{contig} \
+      pesr_depth_unmerged.~{contig}.vcf.gz \
+      pesr_depth_merged_unsorted.~{contig}.vcf
+
+    rm pesr_depth_unmerged.~{contig}.vcf.gz
+
+    # Sort output
+    bcftools sort pesr_depth_merged_unsorted.~{contig}.vcf -Oz -o ~{output_file}
+
+    tabix ~{output_file}
   >>>
 
   output {

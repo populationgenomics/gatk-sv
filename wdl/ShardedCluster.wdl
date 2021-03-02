@@ -173,13 +173,11 @@ task ShardVcfPrecluster {
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
-  Float shard_size = size([vcf, vcf_idx], "GiB")
+  Float shard_size = size(vcf, "GiB")
   Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
+  Float input_disk_scale = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + shard_size * input_mem_scale,
+    mem_gb: 3.75,
     disk_gb: ceil(base_disk_gb + shard_size * input_disk_scale),
     cpu_cores: 1,
     preemptible_tries: 3,
