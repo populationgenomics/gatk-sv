@@ -164,7 +164,7 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    bcftools concat --no-version -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
     tabix "~{outfile_name}"
   >>>
 
