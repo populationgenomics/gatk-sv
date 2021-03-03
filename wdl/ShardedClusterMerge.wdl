@@ -114,7 +114,7 @@ task MergeClusters {
   >>>
 
   output {
-    File clustered_vcf = output_name
-    File clustered_vcf_idx = output_name + ".tbi"
+    File out = output_name
+    File out_index = output_name + ".tbi"
   }
 }

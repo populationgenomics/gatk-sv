@@ -103,7 +103,7 @@ workflow ShardedCluster {
         runtime_override_concat_shards = runtime_override_concat_inner_shards,
     }
   }
-  if (length(SvtkVcfCluster.clustered_vcf) == 0) {
+  if (length(ShardedClusterMerge.clustered_vcf) == 0) {
     call GetVcfHeaderWithMembersInfoLine {
       input:
         vcf_gz=vcf,
