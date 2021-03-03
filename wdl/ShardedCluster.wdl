@@ -27,7 +27,7 @@ workflow ShardedCluster {
     File? exclude_list
     Int sv_size
     Array[String] sv_types
-    Int unmerged_clusters_shard_size = 1000
+    Float merging_shard_scale_factor = 1000000000
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -71,6 +71,8 @@ workflow ShardedCluster {
       runtime_attr_override=runtime_override_shard_vcf_precluster
   }
 
+  Int merge_shard_size = ceil(merging_shard_scale_factor / ShardVcfPrecluster.num_samples)
+
   #Run vcfcluster per shard
   scatter (i in range(length(ShardVcfPrecluster.VID_list_shards))) {
     call SvtkVcfCluster {
@@ -85,7 +87,7 @@ workflow ShardedCluster {
         exclude_list=exclude_list,
         exclude_list_idx=exclude_list_idx,
         svsize=sv_size,
-        records_per_shard=unmerged_clusters_shard_size,
+        records_per_shard=merge_shard_size,
         sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_cluster
@@ -214,6 +216,7 @@ task ShardVcfPrecluster {
 
   command <<<
     set -eu -o pipefail
+    bcftools query -l ~{vcf} | wc -l > sample_count.txt
 
     /opt/sv-pipeline/04_variant_resolution/scripts/shardVCF_preClustering_part1.sh \
       -D ~{dist} \
@@ -226,6 +229,7 @@ task ShardVcfPrecluster {
 
   output {
     Array[File] VID_list_shards = glob("*.VIDs.list")
+    Int num_samples = read_int("sample_count.txt")
   }
 }
 
