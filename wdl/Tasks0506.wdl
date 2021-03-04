@@ -134,7 +134,7 @@ task SortVcf {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcf, "GB")
   Float compression_factor = 10.0
-  Float base_mem_gb = 1.0
+  Float base_mem_gb = 2.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
                                   mem_gb: base_mem_gb + input_size * 10.0,
@@ -147,7 +147,7 @@ task SortVcf {
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 100)
+  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 1000)
 
   command <<<
     set -euo pipefail
