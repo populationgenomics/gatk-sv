@@ -36,6 +36,8 @@ workflow Module0506Cluster {
     RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_concat
+    RuntimeAttr? runtime_override_sort_pesr_depth_merged_vcf
+    RuntimeAttr? runtime_override_concat_pesr_depth
 
     # overrides for VcfClusterContig
     RuntimeAttr? runtime_override_localize_vcfs
@@ -170,21 +172,36 @@ workflow Module0506Cluster {
     }
 
     #Merge PESR & RD VCFs
+    call MiniTasks.ConcatVcfs as ConcatPesrDepth {
+      input:
+        vcfs=[ClusterPesr.clustered_vcf, ClusterDepth.clustered_vcf],
+        vcfs_idx=[ClusterPesr.clustered_vcf_idx, ClusterDepth.clustered_vcf_idx],
+        merge_sort=true,
+        outfile_prefix="all_batches.pesr_depth.~{contig}.unmerged",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_concat_pesr_depth
+    }
     call MergePesrDepth {
       input:
-        pesr_vcf=ClusterPesr.clustered_vcf,
-        pesr_vcf_index=ClusterPesr.clustered_vcf_idx,
-        depth_vcf=ClusterDepth.clustered_vcf,
-        depth_vcf_index=ClusterDepth.clustered_vcf_idx,
+        vcf=ConcatPesrDepth.concat_vcf,
+        vcf_index=ConcatPesrDepth.concat_vcf_idx,
         contig=contig,
+        prefix="all_batches.pesr_depth.~{contig}.unsorted",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_merge_pesr_depth
+    }
+    call MiniTasks.SortVcf as SortMergePesrDepth {
+      input:
+        vcf = MergePesrDepth.merged_vcf,
+        outfile_prefix = "all_batches.pesr_depth.~{contig}.vcf.gz",
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_override_sort_pesr_depth_merged_vcf
     }
 
     #Update SR background fail & bothside pass files (2)
     call MiniTasks.UpdateSrList as UpdateBackgroundFailSecond {
       input:
-        vcf=MergePesrDepth.merged_vcf,
+        vcf=SortMergePesrDepth.out,
         original_list=UpdateBackgroundFailFirst.updated_list,
         outfile="sr_background_fail.~{contig}.updated2.txt",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -192,7 +209,7 @@ workflow Module0506Cluster {
     }
     call MiniTasks.UpdateSrList as UpdateBothsidePassSecond {
       input:
-        vcf=MergePesrDepth.merged_vcf,
+        vcf=SortMergePesrDepth.out,
         original_list=UpdateBothsidePassFirst.updated_list,
         outfile="sr_bothside_pass.~{contig}.updated2.txt",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -204,8 +221,8 @@ workflow Module0506Cluster {
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
       input:
-        vcfs=MergePesrDepth.merged_vcf,
-        vcfs_idx=MergePesrDepth.merged_vcf_idx,
+        vcfs=SortMergePesrDepth.out,
+        vcfs_idx=SortMergePesrDepth.out_index,
         merge_sort=true,
         outfile_prefix="~{cohort_name}.0506_clustered",
         sv_base_mini_docker=sv_base_mini_docker,
@@ -215,8 +232,8 @@ workflow Module0506Cluster {
 
   #Final outputs
   output {
-    Array[File] vcfs = MergePesrDepth.merged_vcf
-    Array[File] vcf_indexes = MergePesrDepth.merged_vcf_idx
+    Array[File] vcfs = SortMergePesrDepth.out
+    Array[File] vcf_indexes = SortMergePesrDepth.out_index
     Array[File] cluster_bothside_pass_lists = UpdateBothsidePassSecond.updated_list
     Array[File] cluster_background_fail_lists = UpdateBackgroundFailSecond.updated_list
     File? merged_vcf = ConcatVcfs.concat_vcf
@@ -228,20 +245,19 @@ workflow Module0506Cluster {
 #Merge PESR + RD VCFs
 task MergePesrDepth {
   input {
-    File pesr_vcf
-    File pesr_vcf_index
-    File depth_vcf
-    File depth_vcf_index
+    File vcf
+    File vcf_index
+    String prefix
     String contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_file = "all_batches.pesr_depth.~{contig}.vcf.gz"
+  String output_file = prefix + ".vcf.gz"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([pesr_vcf, depth_vcf], "GiB")
+  Float input_size = size(vcf, "GiB")
   Float compression_factor_mem = 10.0
   Float compression_factor_disk = 15.0
   Float base_disk_gb = 10.0
@@ -267,27 +283,13 @@ task MergePesrDepth {
 
   command <<<
     set -euo pipefail
-
-    # Merge VCFs (doesn't merge variants)
-    bcftools concat -a --output-type z \
-      ~{pesr_vcf} ~{depth_vcf} --output pesr_depth_unmerged.~{contig}.vcf.gz
-
-    #Run merging script (merges variants)
     /opt/sv-pipeline/04_variant_resolution/scripts/merge_pesr_depth.py \
       --prefix pesr_depth_merged_~{contig} \
-      pesr_depth_unmerged.~{contig}.vcf.gz \
-      pesr_depth_merged_unsorted.~{contig}.vcf
-
-    rm pesr_depth_unmerged.~{contig}.vcf.gz
-
-    # Sort output
-    bcftools sort pesr_depth_merged_unsorted.~{contig}.vcf -Oz -o ~{output_file}
-
-    tabix ~{output_file}
+      ~{vcf} \
+      ~{output_file}
   >>>
 
   output {
     File merged_vcf = output_file
-    File merged_vcf_idx = output_file + ".tbi"
   }
 }
