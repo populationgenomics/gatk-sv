@@ -147,7 +147,7 @@ task SortVcf {
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 1000)
+  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 400)
 
   command <<<
     set -euo pipefail
@@ -158,7 +158,7 @@ task SortVcf {
       cat ~{vcf}
     fi | bcftools sort \
         --temp-dir temp \
-        --max-mem ~{sort_mem_mb}\
+        --max-mem ~{sort_mem_mb}M \
         --output-type z \
         --output-file ~{outfile_name}
     tabix ~{outfile_name}
