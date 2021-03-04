@@ -46,6 +46,7 @@ workflow ShardedCluster {
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_sort_merged_vcf
   }
 
   File vcf_idx = vcf + ".tbi"
@@ -101,6 +102,7 @@ workflow ShardedCluster {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_override_merge_clusters = runtime_override_merge_clusters,
         runtime_override_concat_shards = runtime_override_concat_inner_shards,
+        runtime_override_sort_merged_vcf = runtime_override_sort_merged_vcf
     }
   }
   if (length(ShardedClusterMerge.clustered_vcf) == 0) {

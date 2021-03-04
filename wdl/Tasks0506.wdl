@@ -120,6 +120,65 @@ task CatUncompressedFiles {
   }
 }
 
+task SortVcf {
+  input {
+    File vcf
+    String? outfile_prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String outfile_name = outfile_prefix + ".vcf.gz"
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  Float input_size = size(vcf, "GB")
+  Float compression_factor = 10.0
+  Float base_mem_gb = 1.0
+  Float base_disk_gb = 10.0
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: base_mem_gb + input_size * 10.0,
+                                  disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 100)
+
+  command <<<
+    set -euo pipefail
+    mkdir temp
+    if [[ ~{vcf} =~ \.gz$ ]]; then
+      zcat ~{vcf}
+    else
+      cat ~{vcf}
+    fi | bcftools sort \
+        --temp-dir temp \
+        --max-mem ~{sort_mem_mb}\
+        --output-type z \
+        --output-file ~{outfile_name}
+    tabix ~{outfile_name}
+  >>>
+
+  output {
+    File out = outfile_name
+    File out_index = outfile_name + ".tbi"
+  }
+  runtime {
+    memory: runtime_mem_gb + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+}
+
 # Combine multiple sorted VCFs
 task ConcatVcfs {
   input {

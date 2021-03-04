@@ -21,6 +21,7 @@ workflow ShardedClusterMerge {
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_sort_merged_vcf
   }
 
   #Run vcfcluster per shard
@@ -34,12 +35,19 @@ workflow ShardedClusterMerge {
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_merge_clusters
     }
+    call MiniTasks.SortVcf {
+      input:
+        vcf = MergeClusters.out,
+        outfile_prefix = basename(MergeClusters.out, ".vcf.gz"),
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_override_sort_merged_vcf
+    }
   }
 
   call MiniTasks.ConcatVcfs as ConcatShards {
     input:
-      vcfs=MergeClusters.out,
-      vcfs_idx=MergeClusters.out_index,
+      vcfs=SortVcf.out,
+      vcfs_idx=SortVcf.out_index,
       merge_sort=true,
       outfile_prefix=file_prefix,
       sv_base_mini_docker=sv_base_mini_docker,
@@ -98,23 +106,16 @@ task MergeClusters {
     set -euxo pipefail
     gunzip -c ~{vcf} > unmerged.vcf
     echo "unmerged.vcf" > vcf.list
-
-    svtk vcfcluster vcf.list merged.vcf \
+    svtk vcfcluster vcf.list - \
       -p ~{id_prefix} \
       --preserve-ids \
       --preserve-genotypes \
       --preserve-header \
-      --merge-only
-
-    # remove CLUSTER field, sort and compress the vcf
-    mkdir temp
-    bcftools annotate --no-version -x INFO/CLUSTER merged.vcf \
-      | bcftools sort --temp-dir temp --max-mem ~{sort_mem_mb} --output-type z --output-file ~{output_name}
-    tabix ~{output_name}
+      --merge-only \
+      | gzip > ~{output_name}.vcf.gz
   >>>
 
   output {
-    File out = output_name
-    File out_index = output_name + ".tbi"
+    File out = "~{output_name}.vcf.gz"
   }
 }
