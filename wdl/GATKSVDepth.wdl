@@ -133,7 +133,7 @@ workflow GATKSVDepth {
   }
 
   scatter (i in range(length(ScatterIntervals.scattered_interval_lists))) {
-    String model_name = "~{batch}.depth.shard_~{i}"
+    String model_name = "~{batch}.depth.~{cnv_size_name}.shard_~{i}"
     call SVTrainDepth {
       input:
         depth_file = MakeBincovMatrix.merged_bincov,
@@ -156,7 +156,7 @@ workflow GATKSVDepth {
         model_tar = SVTrainDepth.out,
         ref_fasta_dict = ref_fasta_dict,
         model_name = model_name,
-        output_vcf_filename = "~{model_name}.vcf.gz",
+        output_name = model_name,
         predictive_samples = predictive_samples,
         predictive_iter = predictive_iter,
         discrete_samples = discrete_samples,
@@ -342,7 +342,7 @@ task SVInferDepth {
     Int predictive_iter
     Int discrete_samples
     String model_name
-    String output_vcf_filename
+    String output_name
     String gatk_docker
     String device
     RuntimeAttr? runtime_attr_override
@@ -362,8 +362,8 @@ task SVInferDepth {
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
   output {
-    File out = "~{output_vcf_filename}"
-    File out_index = "~{output_vcf_filename}.tbi"
+    File out = "~{output_name}.vcf.gz"
+    File out_index = "~{output_name}.vcf.gztbi"
   }
   command <<<
 
@@ -372,7 +372,7 @@ task SVInferDepth {
     tar xzf ~{model_tar} svmodel/
 
     gatk --java-options -Xmx~{java_mem_mb}M SVInferDepth \
-      --output ~{output_vcf_filename} \
+      --output ~{output_name}.vcf.gz \
       --predictive-samples ~{predictive_samples} \
       --predictive-iter ~{predictive_iter} \
       --discrete-samples ~{discrete_samples} \
