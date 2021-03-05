@@ -33,7 +33,7 @@ workflow GATKSVJoinSamples {
     Boolean require_breakend_overlap_non_depth_only = true
 
     # Clustering options
-    Float defragment_min_sample_set_fraction_overlap = 0.8
+    Float defragment_min_sample_set_fraction_overlap = 0.9
     Float defragment_padding_fraction = 0.5
 
     String cluster1_algorithm = "SINGLE_LINKAGE"
@@ -61,7 +61,7 @@ workflow GATKSVJoinSamples {
     Int cluster2_pesr_breakend_window = 500
 
     # Evidence aggregation options
-    Int pe_inner_window = 50
+    Int pe_inner_window = 100
     Int pe_outer_window = 500
     Int sr_window = 200
 
@@ -130,6 +130,7 @@ workflow GATKSVJoinSamples {
   Array[String] contigs = read_lines(contig_list)
 
   scatter (contig in contigs) {
+    # Get records on this contig
     call SelectVariants as FilterContig {
       input:
         vcf = sv_vcf,
@@ -139,6 +140,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_filter_contig
     }
+    # Filter non-depth-only records by size and location
     call FilterSVs as FilterNonDepth {
       input:
         vcf = FilterContig.out,
@@ -153,6 +155,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_filter_non_depth
     }
+    # Get depth-only records
     call FilterSVs as FilterDepth1 {
       input:
         vcf = FilterContig.out,
@@ -162,6 +165,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_filter_depth_1
     }
+    # Defragment depth-only records
     call ClusterVariants as Defragment {
       input:
         vcf = FilterDepth1.out,
@@ -175,6 +179,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_defrag
     }
+    # Filter defragmented depth-only records by size and location
     call FilterSVs as FilterDepth2 {
       input:
         vcf = Defragment.out,
@@ -188,6 +193,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_filter_depth_2
     }
+    # Merge depth and non-depth records
     call svg.ConcatVcfs as ConcatDepthAndNonDepth {
       input:
         vcfs = [FilterNonDepth.out, FilterDepth2.out],
@@ -197,6 +203,7 @@ workflow GATKSVJoinSamples {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_concat
     }
+    # First cluster step (default: strict single-linkage)
     call ClusterVariants as Cluster1 {
       input:
         vcf = ConcatDepthAndNonDepth.out,
@@ -217,6 +224,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_cluster_1
     }
+    # Second cluster step (default: less strict max-clique)
     call ClusterVariants as Cluster2 {
       input:
         vcf = Cluster1.out,
@@ -237,6 +245,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_cluster_2
     }
+    # Collect PE evidence
     call AggregatePESREvidence as AggregatePE {
       input:
         vcf = Cluster2.out,
@@ -250,6 +259,7 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_aggregate_pe
     }
+    # Collect SR evidence
     call AggregatePESREvidence as AggregateSR {
       input:
         vcf = AggregatePE.out,
@@ -262,7 +272,7 @@ workflow GATKSVJoinSamples {
         runtime_attr_override = runtime_attr_aggregate_sr
     }
   }
-
+  # Concatenate contig shards
   call svg.ConcatVcfs as ConcatAggregated {
     input:
       vcfs = AggregateSR.out,
@@ -272,7 +282,7 @@ workflow GATKSVJoinSamples {
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat
   }
-
+  # Combine ploidy calls into a single file
   call TarFiles as TarPloidyCalls {
     input:
       files = ploidy_calls,
@@ -280,7 +290,7 @@ workflow GATKSVJoinSamples {
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_tar_ploidy_calls
   }
-
+  # Depth model for large CNVs
   call gatksv_depth.GATKSVDepth as DepthLarge {
     input:
       batch = batch,
@@ -321,7 +331,7 @@ workflow GATKSVJoinSamples {
       runtime_attr_infer = runtime_attr_infer,
       runtime_attr_concat = runtime_attr_concat
   }
-
+  # Depth model for small CNVs
   call gatksv_depth.GATKSVDepth as DepthSmall {
     input:
       batch = batch,
@@ -365,7 +375,7 @@ workflow GATKSVJoinSamples {
       runtime_attr_infer = runtime_attr_infer,
       runtime_attr_concat = runtime_attr_concat
   }
-
+  # Aggregate depth evidence
   call AggregateDepth {
     input:
       vcf = ConcatAggregated.out,
