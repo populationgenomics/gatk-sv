@@ -210,6 +210,7 @@ workflow GATKSVJoinSamples {
         vcf_index = ConcatDepthAndNonDepth.out_index,
         vid_prefix = "SV_" + contig + "_",
         algorithm = cluster1_algorithm,
+        convert_inv = true,
         breakpoint_summary_strategy = cluster1_breakpoint_summary_strategy,
         depth_overlap_fraction = cluster1_depth_overlap_fraction,
         mixed_overlap_fraction = cluster1_mixed_overlap_fraction,
