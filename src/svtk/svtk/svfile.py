@@ -105,7 +105,7 @@ class SVRecord(GSNode):
 
         self.record = record
         self.sources = record.info['ALGORITHMS']
-        self.called_samples = set(get_called_samples(self.record))
+        self.called_samples = None
 
         chrA = record.chrom
         posA = record.pos
@@ -114,6 +114,12 @@ class SVRecord(GSNode):
         name = record.id
 
         super().__init__(chrA, posA, chrB, posB, name)
+
+    def get_called_samples_set(self):
+        if self.called_samples is not None:
+            return self.called_samples
+        self.called_samples = set(get_called_samples(self.record))
+        return self.called_samples
 
     def clusters_with(self, other, dist, frac=0.0, match_strands=False,
                       match_svtypes=True, sample_overlap=0.0):
@@ -152,8 +158,8 @@ class SVRecord(GSNode):
         # Only compute sample overlap if a minimum sample overlap is required
         # and if records are eligible to cluster
         if clusters and sample_overlap > 0:
-            samplesA = self.called_samples
-            samplesB = other.called_samples
+            samplesA = self.get_called_samples_set()
+            samplesB = other.get_called_samples_set()
             clusters = clusters and samples_overlap(samplesA, samplesB, sample_overlap, sample_overlap)
 
         return clusters

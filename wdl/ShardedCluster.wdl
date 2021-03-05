@@ -288,23 +288,7 @@ task SvtkVcfCluster {
   command <<<
     set -euo pipefail
 
-    python3 <<CODE | bgzip > input.vcf.gz
-    import sys
-    import gzip
-
-    with open('~{VIDs}') as f:
-      vids = set([x.strip() for x in f.readlines()])
-
-    with gzip.open('~{vcf}') as f:
-      for lineb in f:
-        line = lineb.decode()
-        if line[0] == '#':
-          sys.stdout.write(line)
-        else:
-          tok = line.split('\t', 3)
-          if tok[2] in vids:
-            sys.stdout.write(line)
-    CODE
+    bcftools view --include ID=@~{VIDs} ~{vcf} -O z -o input.vcf.gz
     tabix input.vcf.gz
 
     ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -f -p bed ~{exclude_list}" else ""}
