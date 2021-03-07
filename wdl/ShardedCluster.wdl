@@ -27,7 +27,7 @@ workflow ShardedCluster {
     File? exclude_list
     Int sv_size
     Array[String] sv_types
-    Float merging_shard_scale_factor = 250000000
+    Float merging_shard_scale_factor = 100000000
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -64,13 +64,12 @@ workflow ShardedCluster {
   }
   Int merge_shard_size = ceil(merging_shard_scale_factor / CountSamples.num_samples)
 
-  call SvtkVcfCluster {
+  call ShardClusters {
     input:
       vcf=vcf,
       prefix=sv_type_prefix,
       dist=dist,
       frac=frac,
-      sample_overlap=sample_overlap,
       exclude_list=exclude_list,
       exclude_list_idx=exclude_list_idx,
       svsize=sv_size,
@@ -81,19 +80,26 @@ workflow ShardedCluster {
   }
 
   #Run vcfcluster per shard
-  scatter (i in range(length(SvtkVcfCluster.out))) {
-    call MergeClusters {
+  scatter (i in range(length(ShardClusters.out))) {
+    call SvtkVcfCluster {
       input:
-        vcf=SvtkVcfCluster.out[i],
-        shard=i,
-        file_prefix="~{sv_type_prefix}.shard_${i}.merge_clusters",
-        id_prefix="~{sv_type_prefix}",
+        vcf=vcf,
+        vids=ShardClusters.out[i],
+        prefix="~{sv_type_prefix}.shard_${i}.clustered",
+        dist=dist,
+        frac=frac,
+        exclude_list=exclude_list,
+        exclude_list_idx=exclude_list_idx,
+        svsize=sv_size,
+        sample_overlap=sample_overlap,
+        records_per_shard=merge_shard_size,
+        sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_merge_clusters
+        runtime_attr_override=runtime_override_svtk_vcf_cluster
     }
     call MiniTasks.SortVcf {
       input:
-        vcf = MergeClusters.out,
+        vcf = SvtkVcfCluster.out,
         outfile_prefix = "~{sv_type_prefix}.shard_${i}.sorted",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_sort_merged_vcf
@@ -171,14 +177,13 @@ task GetVcfHeaderWithMembersInfoLine {
   }
 }
 
-#Run svtk vcfcluster
-task SvtkVcfCluster {
+#Do fast cluster on sites-only vcf (sample_overlap = 0) to generate shards
+task ShardClusters {
   input {
     File vcf
     String prefix
     Int dist
     Float frac
-    Float sample_overlap
     File? exclude_list
     File? exclude_list_idx
     Int svsize
@@ -192,11 +197,9 @@ task SvtkVcfCluster {
 
   Float input_size = size(vcf, "GiB")
   Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 1.0
-  Float input_disk_scale = 10.0
+  Float input_disk_scale = 1.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -216,44 +219,39 @@ task SvtkVcfCluster {
 
   command <<<
     set -euo pipefail
-
+    bcftools view -G ~{vcf} -o sites_only.vcf
     ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -p bed ~{exclude_list}" else ""}
     #Run clustering
-    svtk vcfcluster <(echo "~{vcf}") unmerged_clusters.vcf \
+    svtk vcfcluster <(echo "sites_only.vcf") unmerged_clusters.vcf \
       -d ~{dist} \
       -f ~{frac} \
       ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
       -z ~{svsize} \
       -p ~{prefix} \
       -t ~{sep=',' sv_types} \
-      -o ~{sample_overlap} \
-      --preserve-ids \
-      --preserve-genotypes \
+      -o 0 \
       --preserve-header \
+      --preserve-ids \
       --skip-merge
 
     # Shard output
     python3 <<CODE
     import sys
-    import gzip
     import os
 
-    header = []
     with open('unmerged_clusters.vcf') as f:
       current_vid = ""
       current_cluster = []
       current_shard = 0
       current_shard_size = 0
-      shard_path_format = "~{output_prefix}.cluster_shard_{}.vcf.gz"
+      shard_path_format = "~{output_prefix}.vids.shard_{}.list"
       shard_path = shard_path_format.format(current_shard)
-      fout = gzip.open(shard_path, 'wb')
+      fout = open(shard_path, 'w')
       if fout is None:
         raise IOError("Could not open '{}'".format(shard_path))
         sys.exit(1)
       for line in f:
         if line[0] == '#':
-          fout.write(line.encode('utf-8'))
-          header.append(line)
         else:
           tok = line.split('\t', 3)
           vid = tok[2]
@@ -261,25 +259,23 @@ task SvtkVcfCluster {
             current_cluster.append(line)
           else:
             for record in current_cluster:
-              fout.write(record.encode('utf-8'))
+              fout.write(record.id + '\n')
             current_shard_size += len(current_cluster)
             if current_shard_size >= ~{records_per_shard}:
               current_shard += 1
               current_shard_size = 0
               fout.close()
               shard_path = shard_path_format.format(current_shard)
-              fout = gzip.open(shard_path, 'wb')
+              fout = open(shard_path, 'w')
               if fout is None:
                 raise IOError("Could not open '{}'".format(shard_path))
                 sys.exit(1)
-              for hline in header:
-                fout.write(hline.encode('utf-8'))
             current_cluster = [line]
             current_vid = vid
 
       # Write last cluster
       for record in current_cluster:
-        fout.write(record.encode('utf-8'))
+        fout.write(record.id + '\n')
       current_shard_size += len(current_cluster)
       fout.close()
 
@@ -291,46 +287,44 @@ task SvtkVcfCluster {
   >>>
 
   output {
-    # NOT block-compressed
-    Array[File] out = glob("~{output_prefix}.cluster_shard_*.vcf.gz")
+    Array[File] out = glob("~{output_prefix}.vids.shard_*.list")
   }
 }
 
-
-#Run svtk vcfcluster
-task MergeClusters {
+task SvtkVcfCluster {
   input {
     File vcf
-    String file_prefix
-    String id_prefix
-    Int shard
+    File vids
+    String prefix
+    Int dist
+    Float frac
+    Float sample_overlap
+    File? exclude_list
+    File? exclude_list_idx
+    Int svsize
+    Array[String] sv_types
+    Int records_per_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_name = file_prefix + ".merge_shard_" + shard
+  String output_prefix = "~{prefix}"
 
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
-  Float shard_size = size(vcf, "GiB")
+  Float input_size = size(vcf, "GiB")
   Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
+  Float input_disk_scale = 10.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
-                                  disk_gb: ceil(base_disk_gb + shard_size * input_disk_scale),
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 100)
   runtime {
-    memory: runtime_mem_gb + " GiB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -339,19 +333,25 @@ task MergeClusters {
   }
 
   command <<<
-    set -euxo pipefail
-    gunzip -c ~{vcf} > unmerged.vcf
-    echo "unmerged.vcf" > vcf.list
-    svtk vcfcluster vcf.list - \
-    -p ~{id_prefix} \
-    --preserve-ids \
-    --preserve-genotypes \
-    --preserve-header \
-    --merge-only \
-    | gzip > ~{output_name}.vcf.gz
+    set -euo pipefail
+    bcftools view --no-version --include ID=@~{vids} ~{vcf} -O z -o unclustered.vcf.gz
+    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -p bed ~{exclude_list}" else ""}
+    #Run clustering
+    svtk vcfcluster <(echo "unclustered.vcf.gz") ~{output_prefix}.vcf \
+      -d ~{dist} \
+      -f ~{frac} \
+      ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
+      -z ~{svsize} \
+      -p ~{prefix} \
+      -t ~{sep=',' sv_types} \
+      -o ~{sample_overlap} \
+      --preserve-ids \
+      --preserve-genotypes \
+      --preserve-header
+    gzip ~{output_prefix}.vcf
   >>>
 
   output {
-    File out = "~{output_name}.vcf.gz"
+    File out = "~{output_prefix}.vcf.gz"
   }
 }

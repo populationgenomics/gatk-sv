@@ -52,7 +52,7 @@ workflow ClusterSingleChrom {
       input:
         vcf=vcf,
         records_filter='fgrep "SVTYPE=~{sv_type}"',
-        outfile_prefix=contig_prefix,
+        outfile_prefix=contig_prefix + ".~{sv_type}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_sv_type
     }
