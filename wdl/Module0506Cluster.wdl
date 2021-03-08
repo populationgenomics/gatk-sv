@@ -88,7 +88,7 @@ workflow Module0506Cluster {
       input:
         vcfs=pesr_vcfs,
         batches=batches,
-        prefix="AllBatches_pesr",
+        prefix="~{cohort_name}.pesr",
         dist=300,
         frac=0.1,
         sample_overlap=0.5,
@@ -123,7 +123,7 @@ workflow Module0506Cluster {
       input:
         vcfs=depth_vcfs,
         batches=batches,
-        prefix="AllBatches_depth",
+        prefix="~{cohort_name}.depth",
         dist=500000,
         frac=0.5,
         sample_overlap=0.5,

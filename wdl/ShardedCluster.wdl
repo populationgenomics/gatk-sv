@@ -54,7 +54,6 @@ workflow ShardedCluster {
   if (defined(exclude_list)) {
     File exclude_list_idx = exclude_list + ".tbi"
   }
-  String sv_type_prefix = prefix + "." + contig + "." + sv_type
 
   call utils.CountSamples {
     input:
@@ -67,7 +66,7 @@ workflow ShardedCluster {
   call ShardClusters {
     input:
       vcf=vcf,
-      prefix=sv_type_prefix,
+      prefix=prefix,
       dist=dist,
       frac=frac,
       exclude_list=exclude_list,
@@ -85,14 +84,14 @@ workflow ShardedCluster {
       input:
         vcf=vcf,
         vids=ShardClusters.out[i],
-        prefix="~{sv_type_prefix}.shard_${i}.clustered",
+        prefix="~{prefix}.~{contig}.~{sv_type}.shard_${i}.clustered",
+        vid_prefix="~{prefix}_~{contig}_~{sv_type}_~{i}",
         dist=dist,
         frac=frac,
         exclude_list=exclude_list,
         exclude_list_idx=exclude_list_idx,
         svsize=sv_size,
         sample_overlap=sample_overlap,
-        records_per_shard=merge_shard_size,
         sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_cluster
@@ -100,7 +99,7 @@ workflow ShardedCluster {
     call MiniTasks.SortVcf {
       input:
         vcf = SvtkVcfCluster.out,
-        outfile_prefix = "~{sv_type_prefix}.shard_${i}.sorted",
+        outfile_prefix = "~{prefix}.~{contig}.~{sv_type}.shard_${i}.sorted",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_sort_merged_vcf
     }
@@ -110,7 +109,7 @@ workflow ShardedCluster {
     call GetVcfHeaderWithMembersInfoLine {
       input:
         vcf_gz=vcf,
-        prefix=sv_type_prefix,
+        prefix="~{prefix}.~{contig}.~{sv_type}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_get_vcf_header_with_members_info_line
     }
@@ -121,7 +120,7 @@ workflow ShardedCluster {
         vcfs=SortVcf.out,
         vcfs_idx=SortVcf.out_index,
         merge_sort=true,
-        outfile_prefix="~{sv_type_prefix}.",
+        outfile_prefix="~{prefix}.~{contig}.~{sv_type}.clustered",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat_shards
     }
@@ -193,8 +192,6 @@ task ShardClusters {
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_prefix = "~{prefix}.unmerged_clusters"
-
   Float input_size = size(vcf, "GiB")
   Float base_disk_gb = 10.0
   Float input_disk_scale = 1.0
@@ -238,56 +235,55 @@ task ShardClusters {
     python3 <<CODE
     import sys
     import os
+    import pysam
 
-    with open('unmerged_clusters.vcf') as f:
-      current_vid = ""
-      current_cluster = []
-      current_shard = 0
-      current_shard_size = 0
-      shard_path_format = "~{output_prefix}.vids.shard_{}.list"
-      shard_path = shard_path_format.format(current_shard)
-      fout = open(shard_path, 'w')
-      if fout is None:
-        raise IOError("Could not open '{}'".format(shard_path))
-        sys.exit(1)
-      for line in f:
-        if line[0] == '#':
-        else:
-          tok = line.split('\t', 3)
-          vid = tok[2]
-          if vid == current_vid:
-            current_cluster.append(line)
-          else:
-            for record in current_cluster:
-              fout.write(record.id + '\n')
-            current_shard_size += len(current_cluster)
-            if current_shard_size >= ~{records_per_shard}:
-              current_shard += 1
-              current_shard_size = 0
-              fout.close()
-              shard_path = shard_path_format.format(current_shard)
-              fout = open(shard_path, 'w')
-              if fout is None:
-                raise IOError("Could not open '{}'".format(shard_path))
-                sys.exit(1)
-            current_cluster = [line]
-            current_vid = vid
+    vcf = pysam.VariantFile("unmerged_clusters.vcf")
 
-      # Write last cluster
-      for record in current_cluster:
-        fout.write(record.id + '\n')
-      current_shard_size += len(current_cluster)
-      fout.close()
+    current_cluster = None
+    current_cluster_vids = []
+    current_shard = 0
+    current_shard_size = 0
+    shard_path_format = "~{prefix}.vids.shard_{}.list"
+    shard_path = shard_path_format.format(current_shard)
+    fout = open(shard_path, 'w')
+    if fout is None:
+      raise IOError("Could not open '{}'".format(shard_path))
+      sys.exit(1)
 
-      # Delete trailing empty shard
-      if current_shard > 0 and current_shard_size == 0:
-        os.remove(shard_path)
+    for record in vcf.fetch():
+      cluster_id = record.info['CLUSTER']
+      if cluster_id == current_cluster:
+        current_cluster_vids.append(record.id)
+      else:
+        for vid in current_cluster_vids:
+          fout.write(vid + '\n')
+        current_shard_size += len(current_cluster_vids)
+        if current_shard_size >= ~{records_per_shard}:
+          current_shard += 1
+          current_shard_size = 0
+          fout.close()
+          shard_path = shard_path_format.format(current_shard)
+          fout = open(shard_path, 'w')
+          if fout is None:
+            raise IOError("Could not open '{}'".format(shard_path))
+            sys.exit(1)
+        current_cluster_vids = [record.id]
+        current_cluster = cluster_id
+
+    # Write last cluster
+    for vid in current_cluster_vids:
+      fout.write(vid + '\n')
+    current_shard_size += len(current_cluster_vids)
+    fout.close()
+
+    # Delete trailing empty shard
+    if current_shard > 0 and current_shard_size == 0:
+      os.remove(shard_path)
     CODE
-
   >>>
 
   output {
-    Array[File] out = glob("~{output_prefix}.vids.shard_*.list")
+    Array[File] out = glob("~{prefix}.vids.shard_*.list")
   }
 }
 
@@ -296,6 +292,7 @@ task SvtkVcfCluster {
     File vcf
     File vids
     String prefix
+    String vid_prefix
     Int dist
     Float frac
     Float sample_overlap
@@ -303,7 +300,6 @@ task SvtkVcfCluster {
     File? exclude_list_idx
     Int svsize
     Array[String] sv_types
-    Int records_per_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -342,7 +338,7 @@ task SvtkVcfCluster {
       -f ~{frac} \
       ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
       -z ~{svsize} \
-      -p ~{prefix} \
+      -p ~{vid_prefix} \
       -t ~{sep=',' sv_types} \
       -o ~{sample_overlap} \
       --preserve-ids \

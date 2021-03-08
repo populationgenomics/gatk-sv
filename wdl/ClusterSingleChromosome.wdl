@@ -65,7 +65,7 @@ workflow ClusterSingleChrom {
         frac=frac,
         max_shards=max_shards,
         min_per_shard=min_per_shard,
-        prefix=contig_prefix + "." + sv_type,
+        prefix=prefix,
         contig=contig,
         sv_type=sv_type,
         sample_overlap=sample_overlap,
