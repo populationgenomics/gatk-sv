@@ -182,14 +182,9 @@ task StandardizeVcfs {
         | grep -v ^# \
         | sort -k1,1V -k2,2n \
         > cnvs.bed
-      # head command triggers pipefail
-      set +o pipefail
-      zcat ${beds[0]} | head -n1 > header.txt
-      set -o pipefail
-      cat header.txt cnvs.bed > cnvs.headered.bed
 
       # note svtk generates an index automatically
-      svtk rdtest2vcf --contigs ~{ref_fasta_fai} cnvs.headered.bed samples.list cnvs.vcf.gz
+      svtk rdtest2vcf --contigs ~{ref_fasta_fai} cnvs.bed samples.list cnvs.vcf.gz
       echo "cnvs.vcf.gz" >> vcfs.list
     fi
 
