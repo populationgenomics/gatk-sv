@@ -374,27 +374,22 @@ task IntegrateResolvedVcfs {
   command <<<
     set -euxo pipefail
 
-    ##Inputs##
-    vcf=~{inv_res_vcf}
-    backgroundlist=~{inv_res_vcf}
-    bothendSR=~{all_res_vcf}
-
     ##make bed of the inversion resolved vcf##
-    zcat $inv_resolved_vcf \
+    zcat ~{inv_res_vcf} \
       |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
       |svtk vcf2bed stdin inv.resolve.bed -i MEMBERS
 
     ##make beds of the fully resolved vcf##
-    zcat $full_resolved_vcf \
+    zcat ~{all_res_vcf} \
       |awk '{if ($8~"UNRESOLVED" || $1~"#") print}' \
       |svtk vcf2bed stdin all.unresolved.inv.bed -i MEMBERS
 
-    zcat $full_resolved_vcf \
+    zcat ~{all_res_vcf} \
       |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
       |svtk vcf2bed stdin all.resolved.inv.bed -i MEMBERS
 
     ##get unresolved variants from full vcf that are resolved in inversion resolved vcf###
-    zcat $inv_resolved_vcf \
+    zcat ~{inv_res_vcf} \
       | fgrep -v "#" \
       |awk '{if ($8!~"UNRESOLVED") print}' \
       |fgrep -wvf <(awk '{if ($NF!="MEMBERS") print $NF}' all.resolved.inv.bed  \
@@ -409,7 +404,7 @@ task IntegrateResolvedVcfs {
       |awk '{if ($NF!~",")print $4}' \
       >remove.unresolved.vcf.ids.txt || true
 
-    zcat $full_resolved_vcf \
+    zcat ~{all_res_vcf} \
       |fgrep -wvf remove.unresolved.vcf.ids.txt \
       |cat - add.vcf.lines.txt \
       |bcftools sort - -O z \

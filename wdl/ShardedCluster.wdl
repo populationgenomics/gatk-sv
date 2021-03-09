@@ -27,7 +27,7 @@ workflow ShardedCluster {
     File? exclude_list
     Int sv_size
     Array[String] sv_types
-    Float merging_shard_scale_factor = 100000000
+    Float merging_shard_scale_factor = 30000000
 
     String sv_pipeline_docker
     String sv_base_mini_docker

@@ -20,6 +20,7 @@ import pkg_resources
 from pysam import VariantFile
 from svtk.svfile import SVFile, SVRecordCluster, SVRecord
 from svtk.genomeslink import GenomeSLINK
+from svtk.utils import samples_overlap
 
 
 class VCFCluster(GenomeSLINK):
@@ -117,6 +118,49 @@ class VCFCluster(GenomeSLINK):
         self.header = self.make_vcf_header()
 
         super().__init__(nodes, dist, 1, blacklist)
+
+
+    def clusters_with(self, first, second):
+        """
+        Check if two SV cluster with each other.
+
+        Default behavior is to check whether coordinates are within a specified
+        window. Here the following additional criteria are required:
+        1) SV types match
+        2) SV regions share a minimum reciprocal overlap
+           * Not applicable to translocations
+           * Insertion "regions" are calculated as the insertion site plus the
+             predicted length of the insertion.
+        3) Strands of each breakpoint match (optional)
+        """
+
+        # If svtypes don't match, skip remaining calculations for efficiency
+        if self.match_svtypes and first.svtype != second.svtype:
+            return False
+
+        # If both records have an INS subclass specified, require it to match
+        # Otherwise, permit clustering if one or both don't have subclass
+        if self.match_svtypes and first.svtype == 'INS':
+            if first.record.alts[0] != second.record.alts[0]:
+                if first.record.alts[0] != '<INS>' and first.record.alts[0] != '<INS>':
+                    return False
+
+        # If strands are required to match and don't, skip remaining calcs
+        if self.match_svtypes and self.match_strands:
+            if first.record.info['STRANDS'] != second.record.info['STRANDS']:
+                return False
+
+        clusters = (super().clusters_with(first, second) and
+                    first.overlaps(second, self.frac))
+
+        # Only compute sample overlap if a minimum sample overlap is required
+        # and if records are eligible to cluster
+        if clusters and self.sample_overlap > 0:
+            samplesA = first.get_called_samples_set()
+            samplesB = second.get_called_samples_set()
+            clusters = clusters and samples_overlap(samplesA, samplesB, self.sample_overlap, self.sample_overlap)
+
+        return clusters
 
     def filter_nodes(self):
         """
