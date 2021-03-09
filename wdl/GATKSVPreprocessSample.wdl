@@ -117,31 +117,31 @@ task StandardizeVcfs {
 
       # Standardize by adding required INFO fields
       # Note this will not work on VCFs generated with GATK < v4.1.5.0 !
-      bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%ALT\n' gcnv_filtered.vcf.gz \
+      bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\t%ID\n' gcnv_filtered.vcf.gz \
         | awk -F "\t" -v OFS="\t" '{
-          if ($5=="<DEL>")  {
+          if ($4=="<DEL>")  {
             svtype="DEL"; strands="+-";
-          } else if ($5=="<DUP>") {
+          } else if ($4=="<DUP>") {
             svtype="DUP"; strands="-+";
           } else {
             svtype="."; strands=".";
           }
-          print $1,$2,$3,$4,$3-$2+1,"depth",svtype,strands
+          print $1,$2,$3,$4,$5,$6,$5-$2+1,"depth",svtype,strands
         }' \
         | bgzip \
-        > ann.bed.gz
-      tabix -p bed ann.bed.gz
+        > ann.tab.gz
+      tabix -s1 -b2 -e2 ann.tab.gz
 
       echo '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">' > header_lines.txt
       echo '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">' >> header_lines.txt
       echo '##INFO=<ID=STRANDS,Number=1,Type=String,Description="Breakpoint strandedness [++,+-,-+,--]">' >> header_lines.txt
-      echo '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">' >> header_lines.txt
+      echo '##INFO=<ID=ALGORITHMS,Number=1,Type=String,Description="Source algorithms">' >> header_lines.txt
 
       bcftools annotate \
         --no-version \
-        -a ann.bed.gz \
-        -c CHROM,POS,END,ID,SVLEN,ALGORITHMS,SVTYPE,STRANDS \
+        -a ann.tab.gz \
         -h header_lines.txt \
+        -c CHROM,POS,REF,ALT,INFO/END,ID,INFO/SVLEN,INFO/ALGORITHMS,INFO/SVTYPE,INFO/STRANDS \
         -O z \
         -o gcnv.vcf.gz \
         gcnv_filtered.vcf.gz
