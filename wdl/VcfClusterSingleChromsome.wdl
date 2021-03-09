@@ -53,11 +53,16 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
     RuntimeAttr? runtime_override_concat_shards
   }
+
+  scatter (i in range(length(vcfs))) {
+    File vcf_indexes_ = vcfs[i] + ".tbi"
+  }
   
   #Stream each vcf & join into a single vcf
   call LocalizeContigVcfs {
     input:
       vcfs=vcfs,
+      vcf_indexes = vcf_indexes_,
       batches=batches,
       contig=contig,
       prefix=prefix,
@@ -149,6 +154,7 @@ workflow VcfClusterSingleChrom {
 task LocalizeContigVcfs {
   input {
     Array[File] vcfs
+    Array[File] vcf_indexes
     Array[String] batches
     String contig
     String prefix
