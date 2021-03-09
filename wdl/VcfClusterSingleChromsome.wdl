@@ -156,18 +156,9 @@ task LocalizeContigVcfs {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    vcfs: {
-      localization_optional: true
-    }
-  }
-
-  Float input_size = size(vcfs, "GiB")
-  Float input_size_fraction = 0.1  # Max possible fraction of total VCF we are pulling down
-  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
     mem_gb: 1.0,
-    disk_gb: ceil(base_disk_gb + input_size * input_size_fraction),
+    disk_gb: ceil(10 + size(vcfs, "GiB") * 1.2),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -177,7 +168,7 @@ task LocalizeContigVcfs {
 
   runtime {
     memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GiB"
-  disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -190,9 +181,6 @@ task LocalizeContigVcfs {
 
     # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
     # https://github.com/broadinstitute/gatk-sv/issues/52
-
-    # needed for tabix to operate on remote files
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     #Remote tabix all vcfs to chromosome of interest
     paste ~{write_lines(batches)} ~{write_lines(vcfs)} | while read BATCH VCF_PATH; do
