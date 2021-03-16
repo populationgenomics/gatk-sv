@@ -430,7 +430,7 @@ task AggregateDepth {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 15,
+    mem_gb: 35,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
