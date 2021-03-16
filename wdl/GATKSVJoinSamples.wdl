@@ -38,9 +38,6 @@ workflow GATKSVJoinSamples {
     Float cluster1_depth_overlap_fraction = 0.9
     Float cluster1_mixed_overlap_fraction = 0.9
     Float cluster1_pesr_overlap_fraction = 0.9
-    Int cluster1_depth_overlap_padding = 50
-    Int cluster1_mixed_overlap_padding = 50
-    Int cluster1_pesr_overlap_padding = 50
     Int cluster1_depth_breakend_window = 50
     Int cluster1_mixed_breakend_window = 50
     Int cluster1_pesr_breakend_window = 50
@@ -50,14 +47,12 @@ workflow GATKSVJoinSamples {
     Float cluster2_depth_overlap_fraction = 0.5
     Float cluster2_mixed_overlap_fraction = 0.5
     Float cluster2_pesr_overlap_fraction = 0.5
-    Int cluster2_depth_overlap_padding = 1000
-    Int cluster2_mixed_overlap_padding = 500
-    Int cluster2_pesr_overlap_padding = 500
     Int cluster2_depth_breakend_window = 1000
     Int cluster2_mixed_breakend_window = 500
     Int cluster2_pesr_breakend_window = 500
 
     # Evidence aggregation options
+    Int pesr_aggregation_records_per_shard = 1000
     Int pe_inner_window = 100
     Int pe_outer_window = 500
     Int sr_window = 200
@@ -68,7 +63,7 @@ workflow GATKSVJoinSamples {
     Int large_cnv_condense_num_bins = 20
     Int large_cnv_condense_bin_size = 2000
 
-    Int num_intervals_per_scatter = 10000
+    Int num_intervals_per_scatter = 1000
 
     Int large_cnv_padding = 1
     Int small_cnv_padding = 1
@@ -89,6 +84,7 @@ workflow GATKSVJoinSamples {
     File ref_fasta_dict
     File ref_fasta_fai
     File ref_fasta
+    File genome_file
 
     String linux_docker
     String sv_base_mini_docker
@@ -103,6 +99,7 @@ workflow GATKSVJoinSamples {
     RuntimeAttr? runtime_attr_filter_non_depth
     RuntimeAttr? runtime_attr_filter_depth_1
     RuntimeAttr? runtime_attr_filter_depth_2
+    RuntimeAttr? runtime_attr_shard_clustered
     RuntimeAttr? runtime_attr_aggregate_pe
     RuntimeAttr? runtime_attr_aggregate_sr
     RuntimeAttr? runtime_attr_tar_ploidy_calls
@@ -195,7 +192,6 @@ workflow GATKSVJoinSamples {
       input:
         vcfs = [FilterNonDepth.out, FilterDepth2.out],
         vcfs_idx = [FilterNonDepth.out_index, FilterDepth2.out_index],
-        merge_sort = true,
         outfile_prefix = "~{batch}.~{contig}.concat_depth_and_non_depth",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_concat
@@ -212,9 +208,6 @@ workflow GATKSVJoinSamples {
         depth_overlap_fraction = cluster1_depth_overlap_fraction,
         mixed_overlap_fraction = cluster1_mixed_overlap_fraction,
         pesr_overlap_fraction = cluster1_pesr_overlap_fraction,
-        depth_overlap_padding = cluster1_depth_overlap_padding,
-        mixed_overlap_padding = cluster1_mixed_overlap_padding,
-        pesr_overlap_padding = cluster1_pesr_overlap_padding,
         depth_breakend_window = cluster1_depth_breakend_window,
         mixed_breakend_window = cluster1_mixed_breakend_window,
         pesr_breakend_window = cluster1_pesr_breakend_window,
@@ -233,9 +226,6 @@ workflow GATKSVJoinSamples {
         depth_overlap_fraction = cluster2_depth_overlap_fraction,
         mixed_overlap_fraction = cluster2_mixed_overlap_fraction,
         pesr_overlap_fraction = cluster2_pesr_overlap_fraction,
-        depth_overlap_padding = cluster2_depth_overlap_padding,
-        mixed_overlap_padding = cluster2_mixed_overlap_padding,
-        pesr_overlap_padding = cluster2_pesr_overlap_padding,
         depth_breakend_window = cluster2_depth_breakend_window,
         mixed_breakend_window = cluster2_mixed_breakend_window,
         pesr_breakend_window = cluster2_pesr_breakend_window,
@@ -243,17 +233,36 @@ workflow GATKSVJoinSamples {
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_cluster_2
     }
+  }
+  # Concatenate contig shards
+  call svg.ConcatVcfs as ConcatClustered {
+    input:
+      vcfs = Cluster2.out,
+      vcfs_idx = Cluster2.out_index,
+      outfile_prefix = "~{batch}.clustered",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_concat
+  }
+
+  call svg.ShardVcf as ShardClustered {
+    input:
+      vcf = ConcatClustered.out,
+      vcf_index = ConcatClustered.out_index,
+      records_per_shard = pesr_aggregation_records_per_shard,
+      basename = "~{batch}.clustered",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_shard_clustered
+  }
+  scatter (i in range(length(ShardClustered.out))) {
     # Collect PE evidence
     call AggregatePESREvidence as AggregatePE {
       input:
-        vcf = Cluster2.out,
-        vcf_index = Cluster2.out_index,
-        output_name = "~{batch}.~{contig}.aggregate_pe",
+        vcf = ShardClustered.out[i],
+        output_name = "~{batch}.shard_~{i}.aggregate_pe",
         pe_file = pe_file,
         pe_index = pe_index_,
         pe_inner_window = pe_inner_window,
         pe_outer_window = pe_outer_window,
-        sample_mean_depth_file = sample_mean_depth_file,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_aggregate_pe
     }
@@ -261,25 +270,25 @@ workflow GATKSVJoinSamples {
     call AggregatePESREvidence as AggregateSR {
       input:
         vcf = AggregatePE.out,
-        vcf_index = AggregatePE.out_index,
-        output_name = "~{batch}.~{contig}.aggregate_sr",
+        output_name = "~{batch}.shard_~{i}.aggregate_sr",
         sr_file = sr_file,
         sr_index = sr_index_,
+        sample_mean_depth_file = sample_mean_depth_file,
         sr_window = sr_window,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_aggregate_sr
     }
   }
-  # Concatenate contig shards
+  # Concatenate PESR aggreagtion shards
   call svg.ConcatVcfs as ConcatAggregated {
     input:
       vcfs = AggregateSR.out,
       vcfs_idx = AggregateSR.out_index,
-      merge_sort = true,
-      outfile_prefix = "~{batch}.concat_aggregated",
+      outfile_prefix = "~{batch}.aggregate_pesr",
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat
   }
+
   # Combine ploidy calls into a single file
   call TarFiles as TarPloidyCalls {
     input:
@@ -313,6 +322,7 @@ workflow GATKSVJoinSamples {
       infer_device = depth_infer_device,
       ref_fasta_dict = ref_fasta_dict,
       ref_fasta_fai = ref_fasta_fai,
+      genome_file = genome_file,
       linux_docker = linux_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
@@ -357,6 +367,7 @@ workflow GATKSVJoinSamples {
       infer_device = depth_infer_device,
       ref_fasta_dict = ref_fasta_dict,
       ref_fasta_fai = ref_fasta_fai,
+      genome_file = genome_file,
       linux_docker = linux_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
@@ -437,23 +448,8 @@ task AggregateDepth {
   command <<<
     set -euo pipefail
 
-    # Extract ploidy call tarballs
-    mkdir ploidy-calls
-    tar xzf ~{ploidy_calls_tar} -C ploidy-calls
-    cd ploidy-calls/
-    for file in *.tar.gz; do
-      name=$(basename $file .tar.gz)
-      mkdir $name
-      tar xzf $file -C $name/
-    done
-    cd ../
-    ls ploidy-calls/*/contig_ploidy.tsv > ploidy_files.list
-
     # Create arguments file
     echo "--cnv-intervals-vcf ~{sep=" --cnv-intervals-vcf " depth_posterior_vcfs}" > args.txt
-    while read line; do
-      echo "--ploidy-calls-file $line" >> args.txt
-    done < ploidy_files.list
 
     ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" SVAggregateDepth \
       --arguments_file args.txt \
@@ -494,9 +490,6 @@ task ClusterVariants {
     Float? depth_overlap_fraction
     Float? mixed_overlap_fraction
     Float? pesr_overlap_fraction
-    Int? depth_overlap_padding
-    Int? mixed_overlap_padding
-    Int? pesr_overlap_padding
     Int? depth_breakend_window
     Int? mixed_breakend_window
     Int? pesr_breakend_window
@@ -543,9 +536,6 @@ task ClusterVariants {
       ~{"--depth-overlap-fraction " + depth_overlap_fraction} \
       ~{"--mixed-overlap-fraction " + mixed_overlap_fraction} \
       ~{"--pesr-overlap-fraction " + pesr_overlap_fraction} \
-      ~{"--depth-overlap-padding " + depth_overlap_padding} \
-      ~{"--mixed-overlap-padding " + mixed_overlap_padding} \
-      ~{"--pesr-overlap-padding " + pesr_overlap_padding} \
       ~{"--depth-breakend-window " + depth_breakend_window} \
       ~{"--mixed-breakend-window " + mixed_breakend_window} \
       ~{"--pesr-breakend-window " + pesr_breakend_window} \
@@ -566,7 +556,6 @@ task ClusterVariants {
 task AggregatePESREvidence {
   input {
     File vcf
-    File vcf_index
     String output_name
 
     File? sr_file
@@ -586,9 +575,6 @@ task AggregatePESREvidence {
   }
 
   parameter_meta {
-    vcf: {
-           localization_optional: true
-         }
     sr_file: {
                localization_optional: true
              }
@@ -599,7 +585,7 @@ task AggregatePESREvidence {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 7.5,
+                               mem_gb: 15,
                                disk_gb: 10,
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
@@ -616,6 +602,7 @@ task AggregatePESREvidence {
   }
   command <<<
     set -euo pipefail
+    tabix ~{vcf}
     ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" AggregatePairedEndAndSplitReadEvidence \
       -V ~{vcf} \
       -O ~{output_name}.vcf.gz \
@@ -763,10 +750,15 @@ task TarFiles {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out = "~{name}.tar.gz"
+    File out = "tmp/~{name}.tar.gz"
   }
   command <<<
-    tar czf ~{name}.tar.gz ~{sep=" " files}
+    mkdir tmp
+    cd tmp
+    while read -r file; do
+      mv $file .
+    done < ~{write_lines(files)}
+    tar czf ~{name}.tar.gz *
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

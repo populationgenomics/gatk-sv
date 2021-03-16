@@ -85,7 +85,6 @@ workflow GATKSVGenotype {
     input:
       vcfs = genotyped_vcf_shards,
       vcfs_idx = genotyped_vcf_shard_indexes,
-      merge_sort = true,
       outfile_prefix = "~{batch}.final",
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat
@@ -155,14 +154,12 @@ task ConcatVcfs {
   input {
     Array[File] vcfs
     Array[File]? vcfs_idx
-    Boolean merge_sort = false
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  String merge_flag = if merge_sort then "--allow-overlaps" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -195,7 +192,7 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    bcftools concat -a --output-type z --file-list ${VCFS} --output "~{outfile_name}"
     tabix -p vcf -f "~{outfile_name}"
   >>>
 
@@ -209,7 +206,7 @@ task ShardVcf {
   input {
     File vcf
     File vcf_index
-    String svtype
+    String? svtype
     Int records_per_shard
     String basename
     String gatk_docker
@@ -238,8 +235,8 @@ task ShardVcf {
     gatk --java-options -Xmx~{java_mem_mb}M SelectVariants \
       -V ~{vcf} \
       -O ~{basename} \
-      -select "SVTYPE == '~{svtype}'" \
-      --max-variants-per-shard ~{records_per_shard}
+      --max-variants-per-shard ~{records_per_shard} \
+      ~{"-select \"SVTYPE == '" + svtype + "'\""} \
 
   >>>
   runtime {

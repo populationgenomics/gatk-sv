@@ -44,6 +44,7 @@ workflow GATKSVDepth {
     # Reference
     File ref_fasta_dict
     File ref_fasta_fai
+    File genome_file
 
     # Dockers
     String linux_docker
@@ -99,6 +100,7 @@ workflow GATKSVDepth {
       input:
         counts = select_first([CondenseReadCounts.out, counts])[i],
         interval_list = CNVIntervals.out,
+        genome_file = genome_file,
         output_name = "~{batch}.~{cnv_size_name}.counts.tsv",
         gzip = true,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -170,7 +172,6 @@ workflow GATKSVDepth {
     input:
       vcfs = SVInferDepth.out,
       vcfs_idx = SVInferDepth.out_index,
-      merge_sort = true,
       outfile_prefix = "~{batch}.depth.~{cnv_size_name}",
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat
@@ -363,7 +364,7 @@ task SVInferDepth {
 
   output {
     File out = "~{output_name}.vcf.gz"
-    File out_index = "~{output_name}.vcf.gztbi"
+    File out_index = "~{output_name}.vcf.gz.tbi"
   }
   command <<<
 
@@ -397,6 +398,7 @@ task IntersectCountsWithIntervals {
   input {
     File counts
     File interval_list
+    File genome_file
     String output_name
     Boolean gzip = true
     String sv_base_mini_docker
@@ -420,7 +422,10 @@ task IntersectCountsWithIntervals {
 
     set -euo pipefail
     zgrep -B9999999999 -m1 -v "^@" ~{counts} > ~{output_name}
-    zgrep -v "^@" ~{counts} | tail -n +2 | bedtools intersect -wa -sorted -u -a stdin -b ~{interval_list} >> ~{output_name}
+    zgrep -v "^@" ~{counts} \
+      | tail -n +2 \
+      | bedtools intersect -wa -sorted -g ~{genome_file} -u -a stdin -b ~{interval_list} \
+      >> ~{output_name}
     if ~{gzip}; then
       bgzip ~{output_name}
     fi

@@ -17,7 +17,9 @@
   "genotype_eps_sr1": "1e-2",
   "genotype_eps_sr2": "1e-2",
 
-  "joined_vcf" : [
+  "joined_vcf": "gs://broad-sv-dev-data/sfari/join/sfari.aggregate_depth.vcf.gz",
+
+  "sv_vcfs" : [
     "gs://broad-sv-dev-data/sfari/preprocess_sample_vcfs/SS0012978.preprocess_sample.vcf.gz",
     "gs://broad-sv-dev-data/sfari/preprocess_sample_vcfs/SS0012999.preprocess_sample.vcf.gz",
     "gs://broad-sv-dev-data/sfari/preprocess_sample_vcfs/SS0013020.preprocess_sample.vcf.gz",
