@@ -230,7 +230,7 @@ task JoinVcfs {
   }
 
   Float input_size = size(vcfs, "GiB")
-  Float input_size_ratio = 3.0
+  Float input_size_ratio = 60.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
                                   mem_gb: 1.0,
@@ -257,14 +257,23 @@ task JoinVcfs {
     VCFS_LIST="~{write_lines(vcfs)}"
     JOINED_VCF="~{prefix}.~{contig}.joined.vcf.gz"
     BASE=$(head -n1 $VCFS_LIST)
-    zcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
+
+    # Create header
+    gzcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
+
+    # Site info
+    gzcat $BASE | sed -e '/^##/d' | cut -f 1-9 > sites_only.vcf
 
     # Paste final line of header (samples) and VCF records together
-    cmd="paste <(zcat $BASE | sed -e '/^##/d')"
+    tmp_files=""
+    i=0
     while read vcf; do
-      cmd="$cmd <(zcat $vcf | sed -e '/^##/d' | cut -f 10-)"
-    done < <(sed '1d' $VCFS_LIST)
-    eval "$cmd" | bgzip >> $JOINED_VCF
+    #  gzcat $vcf | sed -e '/^##/d' | cut -f 10- > $i
+    tmp_files+="${i} "
+    i=$((i+1))
+    done < $VCFS_LIST
+
+    paste sites_only.vcf $tmp_files | bgzip >> $JOINED_VCF
     tabix $JOINED_VCF
   >>>
 
