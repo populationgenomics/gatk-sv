@@ -259,20 +259,19 @@ task JoinVcfs {
     BASE=$(head -n1 $VCFS_LIST)
 
     # Create header
-    gzcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
+    zcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
 
     # Site info
-    gzcat $BASE | sed -e '/^##/d' | cut -f 1-9 > sites_only.vcf
+    zcat $BASE | sed -e '/^##/d' | cut -f 1-9 > sites_only.vcf
 
     # Paste final line of header (samples) and VCF records together
     tmp_files=""
     i=0
     while read vcf; do
-    #  gzcat $vcf | sed -e '/^##/d' | cut -f 10- > $i
-    tmp_files+="${i} "
-    i=$((i+1))
+      zcat $vcf | sed -e '/^##/d' | cut -f 10- > $i
+      tmp_files+="${i} "
+      i=$((i+1))
     done < $VCFS_LIST
-
     paste sites_only.vcf $tmp_files | bgzip >> $JOINED_VCF
     tabix $JOINED_VCF
   >>>
