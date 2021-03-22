@@ -265,14 +265,14 @@ task JoinVcfs {
     zcat $BASE | sed -e '/^##/d' | cut -f 1-9 > sites_only.vcf
 
     # Paste final line of header (samples) and VCF records together
-    tmp_files=""
     i=0
+    touch tmp.list
     while read vcf; do
       zcat $vcf | sed -e '/^##/d' | cut -f 10- > $i
-      tmp_files+="${i} "
+      echo "${i}" >>
       i=$((i+1))
     done < $VCFS_LIST
-    paste sites_only.vcf $tmp_files | bgzip >> $JOINED_VCF
+    bcftools merge tmp.list
     tabix $JOINED_VCF
   >>>
 
