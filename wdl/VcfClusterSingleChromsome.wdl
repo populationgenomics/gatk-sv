@@ -254,26 +254,10 @@ task JoinVcfs {
 
   command <<<
     set -euxo pipefail
-    VCFS_LIST="~{write_lines(vcfs)}"
-    JOINED_VCF="~{prefix}.~{contig}.joined.vcf.gz"
-    BASE=$(head -n1 $VCFS_LIST)
-
-    # Create header
-    zcat $BASE | sed -n -e '/^##/p' | bgzip > $JOINED_VCF
-
-    # Site info
-    zcat $BASE | sed -e '/^##/d' | cut -f 1-9 > sites_only.vcf
-
-    # Paste final line of header (samples) and VCF records together
-    i=0
-    touch tmp.list
-    while read vcf; do
-      zcat $vcf | sed -e '/^##/d' | cut -f 10- > $i
-      echo "${i}" >>
-      i=$((i+1))
-    done < $VCFS_LIST
-    bcftools merge tmp.list
-    tabix $JOINED_VCF
+    VCF_LIST="~{write_lines(vcfs)}"
+    cat $VCF_LIST | xargs -n1 tabix
+    bcftools merge --merge id --no-version --file-list $VCF_LIST -O z -o ~{prefix}.~{contig}.joined.vcf.gz
+    tabix ~{prefix}.~{contig}.joined.vcf.gz
   >>>
 
   output {
