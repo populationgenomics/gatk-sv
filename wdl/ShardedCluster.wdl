@@ -310,7 +310,7 @@ task SvtkVcfCluster {
   Float base_disk_gb = 10.0
   Float input_disk_scale = 10.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 3.75,
+                                  mem_gb: 7.5,
                                   disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,

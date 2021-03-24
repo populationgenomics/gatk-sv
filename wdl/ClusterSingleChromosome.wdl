@@ -15,6 +15,7 @@ import "ShardedCluster.wdl" as ShardedCluster
 workflow ClusterSingleChrom {
   input {
     File vcf
+    File vcf_index
     String contig
     String prefix
     Int max_shards
@@ -51,7 +52,8 @@ workflow ClusterSingleChrom {
     call MiniTasks.FilterVcf as SubsetSvType {
       input:
         vcf=vcf,
-        records_filter='fgrep "SVTYPE=~{sv_type}"',
+        vcf_index=vcf_index,
+        records_filter='INFO/SVTYPE="~{sv_type}"',
         outfile_prefix=contig_prefix + ".~{sv_type}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_sv_type

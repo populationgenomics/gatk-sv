@@ -193,7 +193,7 @@ workflow Module0506Cluster {
     call MiniTasks.SortVcf as SortMergePesrDepth {
       input:
         vcf = MergePesrDepth.merged_vcf,
-        outfile_prefix = "all_batches.pesr_depth.~{contig}.vcf.gz",
+        outfile_prefix = "all_batches.pesr_depth.~{contig}",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_sort_pesr_depth_merged_vcf
     }

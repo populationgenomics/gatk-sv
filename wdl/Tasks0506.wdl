@@ -199,7 +199,7 @@ task ConcatVcfs {
   Float compression_factor = 5.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
+    mem_gb: 2.0 + length(vcfs) * 0.05,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -402,12 +402,12 @@ task PasteFiles {
   }
 }
 
-# Select a subset of vcf records by passing a bash filter command
-# records_filter must be a bash command accepting vcf records passed via
-# pipe, and outputing the desired records to stdout
+# Select a subset of vcf records by passing a filter command
+# records_filter must be a bcftools expression
 task FilterVcf {
   input {
     File vcf
+    File vcf_index
     String outfile_prefix
     String records_filter
     Boolean? index_output
@@ -416,16 +416,12 @@ task FilterVcf {
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  Boolean call_tabix = select_first([index_output, true])
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(vcf, "GB")
-  Float compression_factor = 10.0
-  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0 * (1 + compression_factor)),
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -443,39 +439,9 @@ task FilterVcf {
   }
 
   command <<<
-    set -eu -o pipefail
-
-    # uncompress vcf
-    zcat ~{vcf} > uncompressed.vcf
-
-    # Extract vcf header:
-    #  search for first line not starting with '#', stop immediately,
-    #  take everything up to that point, then remove last line.
-    ONLY_HEADER=false
-    grep -B9999999999 -m1 -Ev "^#" uncompressed.vcf | sed '$ d' > header.vcf \
-      || ONLY_HEADER=true
-
-    if $ONLY_HEADER; then
-      # no records were found, so filter is trivial, just use original vcf
-      mv ~{vcf} ~{outfile_name}
-    else
-      N_HEADER=$(wc -l < header.vcf)
-
-      # Put filter inside subshell so that there is no pipefail if there are no matches
-      # NOTE: this is dangerous in the event that the filter is buggy
-      tail -n+$((N_HEADER+1)) uncompressed.vcf \
-        | { ~{records_filter} || true; }\
-        | cat header.vcf - \
-        | vcf-sort \
-        | bgzip -c \
-        > "~{outfile_name}"
-    fi
-
-    if ~{call_tabix}; then
-      tabix -p vcf -f "~{outfile_name}"
-    else
-      touch "~{outfile_name}.tbi"
-    fi
+    set -eu
+    bcftools view --no-version --no-update -i '~{records_filter}' -O z -o ~{outfile_name} ~{vcf}
+    tabix ~{outfile_name}
   >>>
 
   output {

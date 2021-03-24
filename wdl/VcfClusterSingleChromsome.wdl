@@ -74,7 +74,7 @@ workflow VcfClusterSingleChrom {
       vcfs=LocalizeContigVcfs.out,
       contig=contig,
       prefix=prefix,
-      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_join_vcfs
   }
   call FixMultiallelicRecords {
@@ -99,6 +99,7 @@ workflow VcfClusterSingleChrom {
   call VcfClusterTasks.ClusterSingleChrom as ClusterSingleChrom {
     input:
       vcf=FixEvidenceTags.out,
+      vcf_index=FixEvidenceTags.out_index,
       contig=contig,
       prefix=prefix,
       max_shards=max_shards_per_chrom_svtype,
@@ -225,18 +226,18 @@ task JoinVcfs {
     Array[File] vcfs
     String contig
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   Float input_size = size(vcfs, "GiB")
-  Float input_size_ratio = 60.0
+  Float input_size_ratio = 3.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
                                   mem_gb: 1.0,
                                   disk_gb: ceil(base_disk_gb + input_size * input_size_ratio),
                                   cpu_cores: 1,
-                                  preemptible_tries: 3,
+                                  preemptible_tries: 0,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -248,15 +249,34 @@ task JoinVcfs {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
-    set -euxo pipefail
-    VCF_LIST="~{write_lines(vcfs)}"
-    cat $VCF_LIST | xargs -n1 tabix
-    bcftools merge --merge id --no-version --file-list $VCF_LIST -O z -o ~{prefix}.~{contig}.joined.vcf.gz
+    set -euo pipefail
+
+    python3 <<CODE | bgzip > ~{prefix}.~{contig}.joined.vcf.gz
+    import sys
+    import gzip
+
+    fl = open("~{write_lines(vcfs)}")
+    files = [gzip.open(f.strip(), 'rb') for f in fl.readlines()]
+    lines_zip = zip(*files)
+
+    for linesb in lines_zip:
+      lines = [l.decode('utf-8') for l in linesb]
+      ex = lines[0]
+      if ex.startswith('##'):
+        sys.stdout.write(ex)
+      else:
+        sys.stdout.write(ex.strip())
+        if len(lines) > 1:
+          sys.stdout.write('\t')
+          out_lines = [l.strip().split('\t', 9)[-1] for l in lines[1:]]
+          sys.stdout.write("\t".join(out_lines))
+        sys.stdout.write('\n')
+    CODE
     tabix ~{prefix}.~{contig}.joined.vcf.gz
   >>>
 
@@ -278,10 +298,10 @@ task FixMultiallelicRecords {
   }
 
   Float input_size = size(joined_vcf, "GiB") * 2 + size(batch_contig_vcfs, "GiB")
-  Float input_size_fraction = 1.0
+  Float input_size_fraction = 2.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 1.0,
+                                  mem_gb: 3.75,
                                   disk_gb: ceil(base_disk_gb + input_size * input_size_fraction),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,

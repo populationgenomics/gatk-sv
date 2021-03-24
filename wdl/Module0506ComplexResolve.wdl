@@ -57,8 +57,9 @@ workflow Module0506ComplexResolve {
     call MiniTasks.FilterVcf as SubsetInversions {
       input:
         vcf=cluster_vcfs[i],
+        vcf_index=cluster_vcfs[i] + ".tbi",
         outfile_prefix="~{cohort_name}.~{contig}.inversions_only",
-        records_filter="fgrep SVTYPE=INV",
+        records_filter='INFO/SVTYPE="INV"',
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_inversions
     }
