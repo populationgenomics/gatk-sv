@@ -419,6 +419,7 @@ task AggregateDepth {
     File vcf
     File vcf_index
     String output_name
+    File ploidy_calls_tar
     Array[File] depth_posterior_vcfs
     Array[File] depth_posterior_vcfs_indexes
     File ploidy_calls_tar
@@ -448,8 +449,23 @@ task AggregateDepth {
   command <<<
     set -euo pipefail
 
+    # Extract ploidy call tarballs
+    mkdir ploidy-calls
+    tar xzf ~{ploidy_calls_tar} -C ploidy-calls
+    cd ploidy-calls/
+    for file in *.tar.gz; do
+      name=$(basename $file .tar.gz)
+      mkdir $name
+      tar xzf $file -C $name/
+    done
+    cd ../
+    ls ploidy-calls/*/contig_ploidy.tsv > ploidy_files.list
+
     # Create arguments file
     echo "--cnv-intervals-vcf ~{sep=" --cnv-intervals-vcf " depth_posterior_vcfs}" > args.txt
+    while read line; do
+      echo "--ploidy-calls-file $line" >> args.txt
+    done < ploidy_files.list
 
     ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" SVAggregateDepth \
       --arguments_file args.txt \
