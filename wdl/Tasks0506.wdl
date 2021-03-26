@@ -130,15 +130,9 @@ task SortVcf {
 
   String outfile_name = outfile_prefix + ".vcf.gz"
 
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(vcf, "GB")
-  Float compression_factor = 10.0
-  Float base_mem_gb = 2.0
-  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb + input_size * 10.0,
-                                  disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+                                  mem_gb: 2.0,
+                                  disk_gb: ceil(10.0 +  size(vcf, "GB") * 20),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -152,15 +146,12 @@ task SortVcf {
   command <<<
     set -euo pipefail
     mkdir temp
-    if [[ ~{vcf} =~ \.gz$ ]]; then
-      zcat ~{vcf}
-    else
-      cat ~{vcf}
-    fi | bcftools sort \
+    bcftools sort \
         --temp-dir temp \
         --max-mem ~{sort_mem_mb}M \
         --output-type z \
-        --output-file ~{outfile_name}
+        --output-file ~{outfile_name} \
+        ~{vcf}
     tabix ~{outfile_name}
   >>>
 
