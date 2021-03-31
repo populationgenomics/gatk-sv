@@ -131,7 +131,7 @@ task SortVcf {
   String outfile_name = outfile_prefix + ".vcf.gz"
 
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
+                                  mem_gb: 3.75,
                                   disk_gb: ceil(10.0 +  size(vcf, "GB") * 20),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
@@ -141,14 +141,12 @@ task SortVcf {
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-  Int sort_mem_mb = floor(runtime_mem_gb * 1000 - 400)
 
   command <<<
     set -euo pipefail
     mkdir temp
     bcftools sort \
         --temp-dir temp \
-        --max-mem ~{sort_mem_mb}M \
         --output-type z \
         --output-file ~{outfile_name} \
         ~{vcf}
@@ -160,7 +158,7 @@ task SortVcf {
     File out_index = outfile_name + ".tbi"
   }
   runtime {
-    memory: runtime_mem_gb + " GB"
+    memory: runtime_mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])

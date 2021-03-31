@@ -80,10 +80,17 @@ workflow ShardedCluster {
 
   #Run vcfcluster per shard
   scatter (i in range(length(ShardClusters.out))) {
+    call CountLines {
+      input:
+        file=ShardClusters.out[i],
+        sv_base_mini_docker=sv_base_mini_docker
+    }
     call SvtkVcfCluster {
       input:
         vcf=vcf,
         vids=ShardClusters.out[i],
+        num_samples=CountSamples.num_samples,
+        num_vids=CountLines.out,
         prefix="~{prefix}.~{contig}.~{sv_type}.shard_${i}.clustered",
         vid_prefix="~{prefix}_~{contig}_~{sv_type}_~{i}",
         dist=dist,
@@ -293,6 +300,8 @@ task SvtkVcfCluster {
     File vids
     String prefix
     String vid_prefix
+    Int num_vids
+    Int num_samples
     Int dist
     Float frac
     Float sample_overlap
@@ -304,14 +313,11 @@ task SvtkVcfCluster {
     RuntimeAttr? runtime_attr_override
   }
 
+  Float default_mem_gb = 3.75 + (60.0 * (num_vids / 19000.0) * (num_samples / 140000.0))
   String output_prefix = "~{prefix}"
-
-  Float input_size = size(vcf, "GiB")
-  Float base_disk_gb = 10.0
-  Float input_disk_scale = 10.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 30,
-                                  disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+                                  mem_gb: default_mem_gb,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 10.0),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -349,5 +355,30 @@ task SvtkVcfCluster {
 
   output {
     File out = "~{output_prefix}.vcf.gz"
+  }
+}
+
+task CountLines {
+  input {
+    File file
+    String sv_base_mini_docker
+  }
+  runtime {
+    memory: "0.9 GiB"
+    disks: "local-disk 10 HDD"
+    cpu: 1
+    preemptible: 3
+    maxRetries: 1
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: 10
+  }
+
+  command <<<
+    set -euo pipefail
+    wc -l < ~{file} > count.txt
+  >>>
+
+  output {
+    Int out = read_int("count.txt")
   }
 }
