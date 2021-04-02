@@ -266,7 +266,7 @@ task MergePesrDepth {
                                   mem_gb: base_mem_gb + compression_factor_mem * input_size,
                                   disk_gb: ceil(base_disk_gb + compression_factor_disk * input_size),
                                   cpu_cores: 1,
-                                  preemptible_tries: 3,
+                                  preemptible_tries: 0,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
