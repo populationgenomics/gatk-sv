@@ -98,7 +98,7 @@ task BreakpointOverlapFilter1 {
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: 10 + input_size,
+                                  disk_gb: ceil(10 + input_size),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -441,7 +441,7 @@ task BreakpointOverlapFilter8 {
   Float input_size = size([vcf, remove_side1_var], "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 0.9,
-                                  disk_gb: 10 + input_size * 2,
+                                  disk_gb: ceil(10 + input_size * 2),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
