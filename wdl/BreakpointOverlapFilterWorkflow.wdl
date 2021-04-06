@@ -462,7 +462,7 @@ task BreakpointOverlapFilter8 {
     set -euxo pipefail
 
     ##remove variants with samebp##
-    (zgrep -wvf ~{remove_side1_var} $~{vcf} || printf "") \
+    (zgrep -wvf ~{remove_side1_var} ~{vcf} || printf "") \
       | bgzip \
       > ~{output_file}
 
