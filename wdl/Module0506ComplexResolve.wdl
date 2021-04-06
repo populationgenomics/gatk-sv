@@ -34,7 +34,8 @@ workflow Module0506ComplexResolve {
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
     RuntimeAttr? runtime_override_rename_variants
 
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1a
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1b
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_2
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_3
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_4
@@ -108,7 +109,8 @@ workflow Module0506ComplexResolve {
         background_fail=cluster_background_fail_lists[i],
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override_1=runtime_override_breakpoint_overlap_filter_1,
+        runtime_attr_override_1a=runtime_override_breakpoint_overlap_filter_1a,
+        runtime_attr_override_1b=runtime_override_breakpoint_overlap_filter_1b,
         runtime_attr_override_2=runtime_override_breakpoint_overlap_filter_2,
         runtime_attr_override_3=runtime_override_breakpoint_overlap_filter_3,
         runtime_attr_override_4=runtime_override_breakpoint_overlap_filter_4,

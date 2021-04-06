@@ -68,7 +68,8 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_rename_variants
     RuntimeAttr? runtime_override_rename_cleaned_samples
 
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1a
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1b
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_2
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_3
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_4
@@ -223,7 +224,8 @@ workflow Module0506 {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list=runtime_override_update_sr_list,
-      runtime_override_breakpoint_overlap_filter_1=runtime_override_breakpoint_overlap_filter_1,
+      runtime_override_breakpoint_overlap_filter_1a=runtime_override_breakpoint_overlap_filter_1a,
+      runtime_override_breakpoint_overlap_filter_1b=runtime_override_breakpoint_overlap_filter_1b,
       runtime_override_breakpoint_overlap_filter_2=runtime_override_breakpoint_overlap_filter_2,
       runtime_override_breakpoint_overlap_filter_3=runtime_override_breakpoint_overlap_filter_3,
       runtime_override_breakpoint_overlap_filter_4=runtime_override_breakpoint_overlap_filter_4,

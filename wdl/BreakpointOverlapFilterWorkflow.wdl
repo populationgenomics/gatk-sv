@@ -10,7 +10,8 @@ workflow BreakpointOverlapFilterWorkflow {
     File background_fail
     String sv_pipeline_docker
     String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override_1
+    RuntimeAttr? runtime_attr_override_1a
+    RuntimeAttr? runtime_attr_override_1b
     RuntimeAttr? runtime_attr_override_2
     RuntimeAttr? runtime_attr_override_3
     RuntimeAttr? runtime_attr_override_4
@@ -20,16 +21,23 @@ workflow BreakpointOverlapFilterWorkflow {
     RuntimeAttr? runtime_attr_override_8
   }
 
-  call BreakpointOverlapFilter1 {
+  call BreakpointOverlapFilter1a {
     input:
       vcf=vcf,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_override_1
+      runtime_attr_override=runtime_attr_override_1a
+  }
+
+  call BreakpointOverlapFilter1b {
+    input:
+      variants_bed=BreakpointOverlapFilter1a.variants_bed,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_override_1b
   }
 
   call BreakpointOverlapFilter2 {
     input:
-      dupside1=BreakpointOverlapFilter1.dupside1,
+      dupside1=BreakpointOverlapFilter1b.dupside1,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_override_2
   }
@@ -52,7 +60,7 @@ workflow BreakpointOverlapFilterWorkflow {
 
   call BreakpointOverlapFilter5 {
     input:
-      dupside1=BreakpointOverlapFilter1.dupside1,
+      dupside1=BreakpointOverlapFilter1b.dupside1,
       dupside1_bothpassfilter=BreakpointOverlapFilter4.dupside1_bothpassfilter,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_override_5
@@ -87,8 +95,8 @@ workflow BreakpointOverlapFilterWorkflow {
     File out_vcf_index = BreakpointOverlapFilter8.bp_filtered_vcf_idx
   }
 }
-#Run Harrison's overlapping breakpoint filter prior to complex resolution
-task BreakpointOverlapFilter1 {
+
+task BreakpointOverlapFilter1a {
   input {
     File vcf
     String sv_pipeline_docker
@@ -97,8 +105,49 @@ task BreakpointOverlapFilter1 {
 
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 3.75,
-                                  disk_gb: ceil(10 + input_size),
+                                  mem_gb: 1.0,
+                                  disk_gb: ceil(10 + input_size * 2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 0,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+
+    ##clean out variants that overlap at one site##
+    ##pull out variants with duplicate bp that are not driven by depth which will be integrated in the clean vcf##
+    ##make sure to flip bed as well so second bp location can be compared with first from other variants##
+    svtk vcf2bed ~{vcf} stdout -i CHR2 -i STRANDS -i SVLEN -i varGQ -i END -i EVIDENCE -i SVTYPE --split-bnd | gzip > variants.bed.gz
+  >>>
+
+  output {
+    File variants_bed = "variants.bed.gz"
+  }
+}
+
+task BreakpointOverlapFilter1b {
+  input {
+    File variants_bed
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(variants_bed, "GiB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 15,
+                                  disk_gb: ceil(10 + input_size * 2),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -121,29 +170,28 @@ task BreakpointOverlapFilter1 {
     ##clean out variants that overlap at one site##
     ##pull out variants with duplicate bp that are not driven by depth which will be integrated in the clean vcf##
     ##make sure to flip bed as well so second bp location can be compared with first from other variants##
-    svtk vcf2bed ~{vcf} stdout -i CHR2 -i STRANDS -i SVLEN -i varGQ -i END -i EVIDENCE -i SVTYPE --split-bnd  \
-      | sed "s/+-/+ "$'\t -/g' \
-      | sed "s/-+/- "$'\t +/g' \
-      | sed "s/++/+ "$'\t +/g' \
-      | sed "s/--/- "$'\t -/g' | \
-      ##Convert back to 1-based positions##
-      awk -v OFS='\t' '{$2=$2+1; print $0}' \
-      | awk -v OFS='\t' \
-        '{if (!(($NF=="DEL" || $NF=="DUP") && $10>=5000)) print $0 "\n" $7,$12,$2,$4,$5,$6,$1,$9,$8,$10,$11,$2,$13,$14 }' | \
-      ###Find duplicated variants that overlap at same bp one side##
-      awk 'cnt[$1"_"$2"_"$8]++{if (cnt[$1"_"$2"_"$8]==2) print prev[$1"_"$2"_"$8] "\t" $1"_"$2"_"$8 \
-        ; print $0 "\t" $1"_"$2"_"$8} {prev[$1"_"$2"_"$8]=$0}' \
-      | awk '!seen[$4"_"$NF]++' \
-      | awk 'cnt[$NF]++{if (cnt[$NF]==2) print prev[$NF] \
-        ; print $0 } {prev[$NF]=$0}' \
-      > dupside1.bed
+    zcat ~{variants_bed}  \
+    | sed "s/+-/+ "$'\t -/g' \
+    | sed "s/-+/- "$'\t +/g' \
+    | sed "s/++/+ "$'\t +/g' \
+    | sed "s/--/- "$'\t -/g' | \
+    ##Convert back to 1-based positions##
+    awk -v OFS='\t' '{$2=$2+1; print $0}' \
+    | awk -v OFS='\t' \
+    '{if (!(($NF=="DEL" || $NF=="DUP") && $10>=5000)) print $0 "\n" $7,$12,$2,$4,$5,$6,$1,$9,$8,$10,$11,$2,$13,$14 }' | \
+    ###Find duplicated variants that overlap at same bp one side##
+    awk 'cnt[$1"_"$2"_"$8]++{if (cnt[$1"_"$2"_"$8]==2) print prev[$1"_"$2"_"$8] "\t" $1"_"$2"_"$8 \
+    ; print $0 "\t" $1"_"$2"_"$8} {prev[$1"_"$2"_"$8]=$0}' \
+    | awk '!seen[$4"_"$NF]++' \
+    | awk 'cnt[$NF]++{if (cnt[$NF]==2) print prev[$NF] \
+    ; print $0 } {prev[$NF]=$0}' \
+    > dupside1.bed
   >>>
 
   output {
     File dupside1 = "dupside1.bed"
   }
 }
-
 
 task BreakpointOverlapFilter2 {
   input {
