@@ -105,7 +105,7 @@ task BreakpointOverlapFilter1a {
 
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 1.0,
+                                  mem_gb: 15,
                                   disk_gb: ceil(10 + input_size * 2),
                                   cpu_cores: 1,
                                   preemptible_tries: 0,
@@ -129,7 +129,7 @@ task BreakpointOverlapFilter1a {
     ##clean out variants that overlap at one site##
     ##pull out variants with duplicate bp that are not driven by depth which will be integrated in the clean vcf##
     ##make sure to flip bed as well so second bp location can be compared with first from other variants##
-    svtk vcf2bed ~{vcf} stdout -i CHR2 -i STRANDS -i SVLEN -i varGQ -i END -i EVIDENCE -i SVTYPE --split-bnd | gzip > variants.bed.gz
+    svtk vcf2bed ~{vcf} variants.bed.gz -i CHR2 -i STRANDS -i SVLEN -i varGQ -i END -i EVIDENCE -i SVTYPE --split-bnd
   >>>
 
   output {
