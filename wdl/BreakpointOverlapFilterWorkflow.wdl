@@ -171,15 +171,17 @@ task BreakpointOverlapFilter2 {
     RuntimeAttr? runtime_attr_override
   }
 
+  Float input_size = size(dupside1, "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 1.5,
-                                  disk_gb: 10,
+                                  disk_gb: 10 + input_size * 5,
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
     disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
@@ -225,9 +227,10 @@ task BreakpointOverlapFilter3 {
     RuntimeAttr? runtime_attr_override
   }
 
+  Float input_size = size([dupside1, dupside1_freq50, background_fail, bothside_pass], "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 2.0,
-                                  disk_gb: 10,
+                                  disk_gb: 10 + input_size * 10,
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
