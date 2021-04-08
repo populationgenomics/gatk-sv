@@ -273,7 +273,7 @@ task ResolvePrep {
   #   big and disk is cheap)
   Float compressed_input_size = size(vcf, "GiB")
   Float uncompressed_input_size = size([VIDs_list], "GiB")
-  Float compression_factor = 5.0
+  Float compression_factor = 30.0
   Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
@@ -300,7 +300,7 @@ task ResolvePrep {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
     
     # First, subset VCF to variants of interest
     # -uncompress vcf
