@@ -145,11 +145,11 @@ task BreakpointOverlapFilter1b {
       | sed "s/+-/+ "$'\t -/g' \
       | sed "s/-+/- "$'\t +/g' \
       | sed "s/++/+ "$'\t +/g' \
-      | sed "s/--/- "$'\t -/g' \
+      | sed "s/--/- "$'\t -/g' | \
       ##Convert back to 1-based positions##
-      | awk -v OFS='\t' '{$2=$2+1; print $0}' \
+      awk -v OFS='\t' '{$2=$2+1; print $0}' \
       | awk -v OFS='\t' \
-      '{if (!(($NF=="DEL" || $NF=="DUP") && $10>=5000)) print $0 "\n" $7,$12,$2,$4,$5,$6,$1,$9,$8,$10,$11,$2,$13,$14 }' | \
+        '{if (!(($NF=="DEL" || $NF=="DUP") && $10>=5000)) print $0 "\n" $7,$12,$2,$4,$5,$6,$1,$9,$8,$10,$11,$2,$13,$14 }' | \
       ###Find duplicated variants that overlap at same bp one side##
       awk 'cnt[$1"_"$2"_"$8]++{if (cnt[$1"_"$2"_"$8]==2) print prev[$1"_"$2"_"$8] "\t" $1"_"$2"_"$8 \
         ; print $0 "\t" $1"_"$2"_"$8} {prev[$1"_"$2"_"$8]=$0}' \
