@@ -229,8 +229,8 @@ task BreakpointOverlapFilter3 {
 
   Float input_size = size([dupside1, dupside1_freq50, background_fail, bothside_pass], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
-                                  disk_gb: ceil(10 + input_size * 20),
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10 + input_size * 40),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -250,8 +250,6 @@ task BreakpointOverlapFilter3 {
   command <<<
     set -euxo pipefail
 
-    backgroundlist=~{background_fail}
-
     ##Add SRfail###
     { fgrep -wf <(awk '{print $NF}' ~{background_fail}) ~{dupside1_freq50} || true; } \
       | awk '{print $0 "\t" 0}' \
@@ -260,6 +258,7 @@ task BreakpointOverlapFilter3 {
     { fgrep -wvf <(awk '{print $NF}' ~{background_fail}) ~{dupside1_freq50} || true; } \
       | awk '{print $0 "\t" 1}' \
       >> dupside1.passSR.txt
+    rm ~{background_fail}
 
     ##Attach the % of variants that show SR support at bothends##
     join -1 4 -2 1 -e "0" -a 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 1.12 1.13 1.14 1.15 1.16 2.2 \
@@ -267,6 +266,7 @@ task BreakpointOverlapFilter3 {
     <(awk '{print $NF "\t" $1}' ~{bothside_pass} | sort -k1,1) \
     | tr ' ' '\t' \
     > dupside1.bothpassfilter.txt
+    rm dupside1.passSR.txt ~{bothside_pass}
 
     ##count number of samples and indiciate if size gt 50bp##
     join -1 4 -2 1 dupside1.bothpassfilter.txt \
@@ -276,6 +276,7 @@ task BreakpointOverlapFilter3 {
     | tr ' ' '\t' \
     | awk '{if ($10>=50) print $0 "\t" 1;else print $0 "\t" 0}' \
     > dupside1.samplecountfilter.txt
+    rm dupside1.bothpassfilter.txt ~{dupside1}
 
     ##Convert Evidence column into Integers for scoring and ##
     ##RD,PE,SR-1,RD,PE-2,PE,SR-3,RD,SR-4,PE-5,RD-6,SR-7##
@@ -293,6 +294,7 @@ task BreakpointOverlapFilter3 {
     ##assign BND to bottom
     awk '{if ($14=="BND") print $0 "\t" 0;else print $0 "\t" 1}' \
     > dupside1.allfilter.txt
+    rm dupside1.samplecountfilter.txt
 
     ##sort file with overlapping samples LevelofSupport->BothEndsupport->SRfail-> Not BND->Higher varq-> Higher Freq -> Smallest size if gt 5kb##
     sort -k20,20n -k17,17nr -nrk16,16 -k21,21nr -k11,11nr -k18,18nr  -k19,19nr -k10,10n dupside1.allfilter.txt \
