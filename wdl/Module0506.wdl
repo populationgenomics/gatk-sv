@@ -76,7 +76,6 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_5
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_6
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_7
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter_8
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_ids_from_vcf
@@ -232,7 +231,6 @@ workflow Module0506 {
       runtime_override_breakpoint_overlap_filter_5=runtime_override_breakpoint_overlap_filter_5,
       runtime_override_breakpoint_overlap_filter_6=runtime_override_breakpoint_overlap_filter_6,
       runtime_override_breakpoint_overlap_filter_7=runtime_override_breakpoint_overlap_filter_7,
-      runtime_override_breakpoint_overlap_filter_8=runtime_override_breakpoint_overlap_filter_8,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
       runtime_override_rename_variants=runtime_override_rename_variants,
       runtime_override_subset_inversions=runtime_override_subset_inversions,

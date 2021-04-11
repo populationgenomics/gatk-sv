@@ -42,7 +42,6 @@ workflow Module0506ComplexResolve {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_5
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_6
     RuntimeAttr? runtime_override_breakpoint_overlap_filter_7
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter_8
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_subset_inversions
@@ -116,8 +115,7 @@ workflow Module0506ComplexResolve {
         runtime_attr_override_4=runtime_override_breakpoint_overlap_filter_4,
         runtime_attr_override_5=runtime_override_breakpoint_overlap_filter_5,
         runtime_attr_override_6=runtime_override_breakpoint_overlap_filter_6,
-        runtime_attr_override_7=runtime_override_breakpoint_overlap_filter_7,
-        runtime_attr_override_8=runtime_override_breakpoint_overlap_filter_8
+        runtime_attr_override_7=runtime_override_breakpoint_overlap_filter_7
     }
 
     #Resolve all-variants VCF after same-bp overlap filter
