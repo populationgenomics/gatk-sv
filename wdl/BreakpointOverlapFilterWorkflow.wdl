@@ -297,11 +297,12 @@ task BreakpointOverlapFilter3 {
     join -1 4 -2 1 -e "0" -a 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 1.11 1.12 1.13 1.14 1.15 1.16 2.2 \
       dupside1.passSR.sorted.txt bothside_pass.sorted.txt \
       | tr ' ' '\t' \
-      > dupside1.bothpassfilter.txt
+      | bgzip \
+      > dupside1.bothpassfilter.txt.gz
   >>>
 
   output {
-    File dupside1_bothpassfilter = "dupside1.bothpassfilter.txt"
+    File dupside1_bothpassfilter = "dupside1.bothpassfilter.txt.gz"
   }
 }
 
@@ -316,8 +317,8 @@ task BreakpointOverlapFilter4 {
 
   Float input_size = size([dupside1, dupside1_bothpassfilter], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 30,
-                                  disk_gb: ceil(10 + input_size * 10),
+                                  mem_gb: 60,
+                                  disk_gb: ceil(10 + input_size * 100),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -345,14 +346,17 @@ task BreakpointOverlapFilter4 {
     rm -r temp ~{dupside1}
 
     ##count number of samples and indiciate if size gt 50bp##
-    join -1 4 -2 1 ~{dupside1_bothpassfilter} dupside1.A.txt \
+    zcat ~{dupside1_bothpassfilter} > dupside1_bothpassfilter.txt
+    rm ~{dupside1_bothpassfilter}
+    join -1 4 -2 1 dupside1_bothpassfilter.txt dupside1.A.txt \
       | tr ' ' '\t' \
       | awk '{if ($10>=50) print $0 "\t" 1;else print $0 "\t" 0}' \
-      > dupside1.samplecountfilter.txt
+      | bgzip \
+      > dupside1.samplecountfilter.txt.gz
   >>>
 
   output {
-    File dupside1_samplecountfilter = "dupside1.samplecountfilter.txt"
+    File dupside1_samplecountfilter = "dupside1.samplecountfilter.txt.gz"
   }
 }
 
@@ -365,8 +369,8 @@ task BreakpointOverlapFilter5 {
 
   Float input_size = size(dupside1_samplecountfilter, "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 30,
-                                  disk_gb: ceil(10 + input_size * 4),
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10 + input_size * 100),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -388,7 +392,8 @@ task BreakpointOverlapFilter5 {
 
     ##Convert Evidence column into Integers for scoring and ##
     ##RD,PE,SR-1,RD,PE-2,PE,SR-3,RD,SR-4,PE-5,RD-6,SR-7##
-    sed 's/BAF,//g' ~{dupside1_samplecountfilter} \
+    zcat ~{dupside1_samplecountfilter} \
+      | sed 's/BAF,//g' \
       | awk -v OFS='\t' '
       {
         if ($13=="PE,RD,SR") print $0 "\t" 1
@@ -401,11 +406,12 @@ task BreakpointOverlapFilter5 {
       }' | \
       ##assign BND to bottom
       awk '{if ($14=="BND") print $0 "\t" 0;else print $0 "\t" 1}' \
-      > dupside1.allfilter.txt
+      | bgzip \
+      > dupside1.allfilter.txt.gz
   >>>
 
   output {
-    File dupside1_allfilter = "dupside1.allfilter.txt"
+    File dupside1_allfilter = "dupside1.allfilter.txt.gz"
   }
 }
 
@@ -419,8 +425,8 @@ task BreakpointOverlapFilter6 {
 
   Float input_size = size([dupside1_allfilter, dupside1_freq50], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 30,
-                                  disk_gb: ceil(10 + input_size * 4),
+                                  mem_gb: 60,
+                                  disk_gb: ceil(10 + input_size * 100),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -442,16 +448,18 @@ task BreakpointOverlapFilter6 {
 
     ##sort file with overlapping samples LevelofSupport->BothEndsupport->SRfail-> Not BND->Higher varq-> Higher Freq -> Smallest size if gt 5kb##
     mkdir temp
-    sort -T temp -k20,20n -k17,17nr -nrk16,16 -k21,21nr -k11,11nr -k18,18nr  -k19,19nr -k10,10n ~{dupside1_allfilter} \
+    zcat ~{dupside1_allfilter} \
+      | sort -T temp -k20,20n -k17,17nr -nrk16,16 -k21,21nr -k11,11nr -k18,18nr  -k19,19nr -k10,10n \
       | awk '!seen[$15]++' \
       | awk '{print $1}' \
       | (fgrep -wvf - ~{dupside1_freq50} || printf "") \
       | awk '{print $4}' \
-      > remove.side1.var.txt
+      | bgzip \
+      > remove.side1.var.txt.gz
   >>>
 
   output {
-    File remove_side1_var = "remove.side1.var.txt"
+    File remove_side1_var = "remove.side1.var.txt.gz"
   }
 }
 
@@ -468,8 +476,8 @@ task BreakpointOverlapFilter7 {
 
   Float input_size = size([vcf, remove_side1_var], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 0.9,
-                                  disk_gb: ceil(10 + input_size * 4),
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10 + input_size * 100),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -490,7 +498,9 @@ task BreakpointOverlapFilter7 {
     set -euxo pipefail
 
     ##remove variants with samebp##
-    (zgrep -wvf ~{remove_side1_var} ~{vcf} || printf "") \
+    zcat ~{remove_side1_var} > remove.side1.var.txt
+    rm ~{remove_side1_var}
+    (zgrep -wvf remove.side1.var.txt ~{vcf} || printf "") \
       | bgzip \
       > ~{output_file}
 
