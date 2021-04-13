@@ -255,8 +255,8 @@ task BreakpointOverlapFilter3 {
 
   Float input_size = size([dupside1_freq50, background_fail, bothside_pass], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 30,
-                                  disk_gb: ceil(10 + input_size * 80),
+                                  mem_gb: 1.0 + input_size * 2.5,
+                                  disk_gb: ceil(10 + input_size * 30),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -318,7 +318,7 @@ task BreakpointOverlapFilter4 {
   Float input_size = size([dupside1, dupside1_bothpassfilter], "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 60,
-                                  disk_gb: ceil(10 + input_size * 100),
+                                  disk_gb: ceil(10 + input_size * 5),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -369,8 +369,8 @@ task BreakpointOverlapFilter5 {
 
   Float input_size = size(dupside1_samplecountfilter, "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 7.5,
-                                  disk_gb: ceil(10 + input_size * 100),
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10 + input_size * 5),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -425,8 +425,8 @@ task BreakpointOverlapFilter6 {
 
   Float input_size = size([dupside1_allfilter, dupside1_freq50], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 60,
-                                  disk_gb: ceil(10 + input_size * 100),
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(50 + input_size * 5),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -476,8 +476,8 @@ task BreakpointOverlapFilter7 {
 
   Float input_size = size([vcf, remove_side1_var], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 7.5,
-                                  disk_gb: ceil(10 + input_size * 100),
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10 + input_size * 3),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
