@@ -446,14 +446,11 @@ task SvtkResolve {
      merged_discfile, merged_discfile_idx],
     "GiB"
   )
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 3.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3 + input_size * 10,
+    disk_gb: ceil(10 + input_size * 12),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -538,12 +535,9 @@ task RestoreUnresolvedCnv {
   # straightforward filtering via grep and python script (line-by-line processing)
   #   -> means essentially no memory or disk overhead
   Float input_size = size([resolved_vcf, unresolved_vcf], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10 + input_size * 20),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
