@@ -219,13 +219,11 @@ task IntegrateResolvedVcfs {
   }
 
   Float input_size = size([inv_res_vcf, all_res_vcf], "GiB")
-  Float base_mem_gb = 2.0
-  Float base_disk_gb = 5.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb,
-                                  disk_gb: ceil(base_disk_gb + input_size * 3.0),
+                                  mem_gb: 2.0,
+                                  disk_gb: ceil(10 + input_size * 10),
                                   cpu_cores: 1,
-                                  preemptible_tries: 3,
+                                  preemptible_tries: 1,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -273,10 +271,11 @@ task IntegrateResolvedVcfs {
       |awk '{if ($NF!~",")print $4}' \
       >remove.unresolved.vcf.ids.txt || true
 
+    mkdir temp
     zcat ~{all_res_vcf} \
       |fgrep -wvf remove.unresolved.vcf.ids.txt \
       |cat - add.vcf.lines.txt \
-      |bcftools sort - -O z \
+      |bcftools sort - -O z -T temp \
       > ~{prefix}.integrated_resolved.vcf.gz
 
     tabix ~{prefix}.integrated_resolved.vcf.gz
