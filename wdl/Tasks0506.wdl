@@ -582,11 +582,9 @@ task SplitVcf {
   # Note that the header is multiplied by the number of shards, but it's so small as to be a rounding error unless
   # thousands of shards are produced (and even then, small compared to base_disk_gb)
   Float input_size = size(vcf, "GB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0,
-    disk_gb: ceil(base_disk_gb + input_size * compression_factor * 2.0),
+    disk_gb: ceil(10 + input_size * 30),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
