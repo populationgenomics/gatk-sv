@@ -186,7 +186,7 @@ task ParseGenotypes {
   Float input_size = size([vcf, intervals, genotypes, ped_file], "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 2.0 + 5.0 * input_size,
-    disk_gb: ceil(5 + input_size * 30),
+    disk_gb: ceil(5 + input_size * 60),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
