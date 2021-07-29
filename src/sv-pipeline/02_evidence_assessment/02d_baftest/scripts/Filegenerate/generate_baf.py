@@ -3,7 +3,6 @@
 import argparse
 import numpy as np
 import pysam
-import sys
 
 
 def filter_record(record, unfiltered=False):
@@ -17,7 +16,7 @@ def filter_record(record, unfiltered=False):
 
     Parameters
     ----------
-    records : iterator of pysam.VariantRecords
+    record : Object of pysam.VariantRecords
 
     Returns
     ------
@@ -41,7 +40,7 @@ def filter_record(record, unfiltered=False):
     return False
 
 
-def calc_BAF(record, samples=None):
+def calc_BAF(record, samples):
     """
 
     Parameters
@@ -66,15 +65,12 @@ def calc_BAF(record, samples=None):
         DP = record.samples[sample]['DP']
         AD = record.samples[sample]['AD']
 
-        if (DP is not None) and (DP > 10): # SNP sites with >10 DP are included in BAF profile
+        if (DP is not None) and (DP > 10):  # SNP sites with >10 DP are included in BAF profile
             return AD[0] / float(DP)
         else:
             return np.nan
 
-    if samples is None:
-        samples = record.samples.keys()
-
-    bafs = np.array([_calc_BAF(sample) for sample in samples], dtype=np.float)
+    bafs = np.array([_calc_BAF(sample) for sample in samples], dtype=float)
 
     return bafs, samples
 
@@ -82,8 +78,8 @@ def calc_BAF(record, samples=None):
 def normalize_bafs(bafs, samples, max_std=0.2):
     """
     Normalize BAFs and exclude outlying sites
-    Normalize so per variant median BAF==0.5. Ignore sites with more than 0.2 standard deviation across samples. 
-    
+    Normalize so per variant median BAF==0.5. Ignore sites with more than 0.2 standard deviation across samples.
+
     Parameters
     ----------
     bafs : np.ndarray (n_sites x n_samples)
@@ -116,21 +112,33 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--samples-list', default=None)
+    parser.add_argument('vcf')
+    parser.add_argument('--samples-list')
     parser.add_argument('--unfiltered', action='store_true')
+    parser.add_argument('--ignore-missing-vcf-samples', action='store_true')
     args = parser.parse_args()
-    vcf = pysam.VariantFile(sys.stdin)
+    vcf = pysam.VariantFile(args.vcf)
+    vcf_samples = vcf.header.samples
     if args.samples_list is not None:
         samples_list = read_samples_list(args.samples_list)
+        samples_list_intersection = set(samples_list).intersection(set(vcf_samples))
+        if args.ignore_missing_vcf_samples:
+            samples_list = [s for s in samples_list if s in samples_list_intersection]  # Preserves order
+        elif len(samples_list) > len(samples_list_intersection):
+            missing_samples = set(samples_list) - samples_list_intersection
+            raise ValueError("VCF is missing samples in the samples list. Use --ignore-missing-vcf-samples to bypass "
+                             "this error. Samples: {}".format(", ".join(missing_samples)))
     else:
-        samples_list = None
+        samples_list = vcf_samples
+
     # While loop to iterate over all records, then break if reach the end
     for record in vcf:
         if not filter_record(record, args.unfiltered):
             baf, record_samples = calc_BAF(record, samples=samples_list)
             baf, record_samples = normalize_bafs(baf, record_samples)
             for i in range(len(record_samples)):
-                print(str(record.chrom) + "\t" + str(record.pos) + "\t" + "{0:.2f}".format(baf[i]) + "\t" + record_samples[i])
+                print(str(record.chrom) + "\t" + str(record.pos) + "\t" +
+                      "{0:.2f}".format(baf[i]) + "\t" + record_samples[i])
 
 
 if __name__ == '__main__':
