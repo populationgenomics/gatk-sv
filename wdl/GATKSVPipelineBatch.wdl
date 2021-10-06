@@ -9,6 +9,7 @@ import "MakeCohortVcf.wdl" as makecohortvcf
 import "Utils.wdl" as utils
 import "Structs.wdl"
 import "TestUtils.wdl" as tu
+import "TrainGCNV.wdl" as traingcnv
 
 # GATK SV Pipeline batch mode
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch, GenotypeBatch, RegenotypeCNVs,
@@ -44,6 +45,9 @@ workflow GATKSVPipelineBatch {
     # BAF Option #1 (provide all)
     # From single-sample gVCFS
     Array[File]? gvcfs
+
+    # gCNV model tars
+    Array[File]? gcnv_model_tars
 
     # BAF Option #2
     # From multi-sample VCFs (sharded by position)
@@ -179,6 +183,16 @@ workflow GATKSVPipelineBatch {
       sv_base_docker=sv_base_docker
   }
 
+  if (!defined(gcnv_model_tars)) {
+    call traingcnv.TrainGCNV {
+      input:
+        samples=sample_ids,
+        count_files=counts_files_
+    }
+  }
+
+  Array[File] gcnv_model_tars_ = select_first([gcnv_model_tars, TrainGCNV.cohort_gcnv_model_tars])
+
   call phase1.GATKSVPipelinePhase1 {
     input:
       batch=batch,
@@ -221,7 +235,8 @@ workflow GATKSVPipelineBatch {
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker
+      condense_counts_docker=condense_counts_docker,
+      gcnv_model_tars=gcnv_model_tars_
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -346,6 +361,7 @@ workflow GATKSVPipelineBatch {
     Array[File]? std_manta_vcfs = GATKSVPipelinePhase1.std_manta_vcf
     Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
     Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
+    Array[File]? gcnv_model_tars = TrainGCNV.gcnv_model_tars
     File bincov_matrix = GATKSVPipelinePhase1.merged_bincov
     File del_bed = GATKSVPipelinePhase1.merged_dels
     File dup_bed = GATKSVPipelinePhase1.merged_dups
