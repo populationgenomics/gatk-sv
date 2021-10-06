@@ -361,7 +361,7 @@ workflow GATKSVPipelineBatch {
     Array[File]? std_manta_vcfs = GATKSVPipelinePhase1.std_manta_vcf
     Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
     Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
-    Array[File]? gcnv_model_tars = TrainGCNV.gcnv_model_tars
+    Array[File]? std_gcnv_model_tars = TrainGCNV.cohort_gcnv_model_tars
     File bincov_matrix = GATKSVPipelinePhase1.merged_bincov
     File del_bed = GATKSVPipelinePhase1.merged_dels
     File dup_bed = GATKSVPipelinePhase1.merged_dups
