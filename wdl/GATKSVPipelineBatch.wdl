@@ -187,7 +187,15 @@ workflow GATKSVPipelineBatch {
     call traingcnv.TrainGCNV {
       input:
         samples=sample_ids,
-        count_files=counts_files_
+        count_files=counts_files_,
+        cohort=batch,
+        reference_fasta=reference_fasta,
+        reference_index=reference_index,
+        reference_dict=reference_dict,
+        linux_docker=linux_docker,
+        gatk_docker=gatk_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        condense_counts_docker=condense_counts_docker
     }
   }
 
