@@ -48,6 +48,7 @@ workflow GATKSVPipelineBatch {
 
     # gCNV model tars
     Array[File]? gcnv_model_tars
+    File? contig_ploidy_model_tar
 
     # BAF Option #2
     # From multi-sample VCFs (sharded by position)
@@ -183,7 +184,7 @@ workflow GATKSVPipelineBatch {
       sv_base_docker=sv_base_docker
   }
 
-  if (!defined(gcnv_model_tars)) {
+  if (!defined(gcnv_model_tars) || !defined(contig_ploidy_model_tar)) {
     call traingcnv.TrainGCNV {
       input:
         samples=sample_ids,
@@ -200,6 +201,7 @@ workflow GATKSVPipelineBatch {
   }
 
   Array[File] gcnv_model_tars_ = select_first([gcnv_model_tars, TrainGCNV.cohort_gcnv_model_tars])
+  File contig_ploidy_model_tar_ = select_first([contig_ploidy_model_tar, TrainGCNV.cohort_contig_ploidy_model_tar])
 
   call phase1.GATKSVPipelinePhase1 {
     input:
@@ -244,7 +246,8 @@ workflow GATKSVPipelineBatch {
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
       condense_counts_docker=condense_counts_docker,
-      gcnv_model_tars=gcnv_model_tars_
+      gcnv_model_tars=gcnv_model_tars_,
+      contig_ploidy_model_tar=contig_ploidy_model_tar_,
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -370,6 +373,7 @@ workflow GATKSVPipelineBatch {
     Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
     Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
     Array[File]? std_gcnv_model_tars = TrainGCNV.cohort_gcnv_model_tars
+    File? std_contig_ploidy_model_tar = TrainGCNV.cohort_contig_ploidy_model_tar
     File bincov_matrix = GATKSVPipelinePhase1.merged_bincov
     File del_bed = GATKSVPipelinePhase1.merged_dels
     File dup_bed = GATKSVPipelinePhase1.merged_dups
