@@ -16,7 +16,6 @@ import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
-import "TestUtils.wdl" as tu
 import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode
@@ -293,6 +292,7 @@ workflow GATKSVPipelineSingleSample {
 
     File rmsk
     File segdups
+    String? chr_x
 
     Int? min_large_pesr_call_size_for_filtering
     Float? min_large_pesr_depth_overlap_fraction
@@ -305,6 +305,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_rewritesrcoords
 
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
+    RuntimeAttr? runtime_attr_get_male_only
 
     ############################################################
     ## GenotypeBatch
@@ -774,6 +775,16 @@ workflow GATKSVPipelineSingleSample {
       sv_base_docker = sv_base_docker
   }
 
+  call batchmetrics.GetMaleOnlyVariantIDs {
+    input:
+      vcf = ClusterBatch.depth_vcf,
+      female_samples = SamplesList.female_samples,
+      male_samples = SamplesList.male_samples,
+      contig = select_first([chr_x, "chrX"]),
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_get_male_only
+  }
+
   call SRTest.SRTest as SRTest {
     input:
       splitfile = GatherBatchEvidence.merged_SR,
@@ -789,6 +800,7 @@ workflow GATKSVPipelineSingleSample {
       samples = SamplesList.samples_file,
       male_samples = SamplesList.male_samples,
       female_samples = SamplesList.female_samples,
+      male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
       run_common = false,
       sv_base_mini_docker = sv_base_mini_docker,
       linux_docker = linux_docker,

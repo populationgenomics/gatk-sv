@@ -26,6 +26,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [AnnotateVcf](#annotate-vcf) - Annotation
     * [Module 09](#module09) - QC and Visualization
     * Additional modules - Mosaic and de novo
+* [CI/CD](#cicd)
 * [Troubleshooting](#troubleshooting)
 
 
@@ -221,7 +222,6 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file
-* B-allele fraction (BAF) file
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*
@@ -467,6 +467,13 @@ Visualization methods include:
 * IGV Visualization - generate IGV plots of each SV for individual sample, ideal for visualizing de novo small SVs.
 * Module09.visualize.wdl - generate RD plots and IGV plots, and combine them for easy review.
 
+## CI/CD
+This repository is maintained following the norms of 
+continuous integration (CI) and continuous delivery (CD). 
+GATK-SV CI/CD is developed as a set of Github Actions
+workflows that are available under the `.github/workflows`
+directory. Please refer to the [workflow's README](.github/workflows/README.md) 
+for their current coverage and setup. 
 
 ## <a name="troubleshooting">Troubleshooting</a>
 

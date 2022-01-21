@@ -26,17 +26,23 @@ workflow AnnotateExternalAF {
         RuntimeAttr? runtime_attr_modify_vcf
         RuntimeAttr? runtime_override_combine_vcfs
         RuntimeAttr? runtime_override_split_vcf
+        RuntimeAttr? runtime_attr_split_ref_bed
+        RuntimeAttr? runtime_attr_split_query_vcf
+        RuntimeAttr? runtime_attr_bedtools_closest
+        RuntimeAttr? runtime_attr_select_matched_svs
 
     }
-    call SplitBed as split_ref_bed{
+    call SplitBed as split_ref_bed {
         input:
             bed = ref_bed,
-            sv_base_mini_docker = sv_base_mini_docker
+            sv_base_mini_docker = sv_base_mini_docker,
+            runtime_attr_override = runtime_attr_split_ref_bed
     }
-    call SplitVcf as split_query_vcf{
+    call SplitVcf as split_query_vcf {
         input:
             vcf = vcf,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_split_query_vcf
     }
 
     Array[String] svtype_list = ["DEL","DUP","INS","INV_CPX","BND_CTX"]
@@ -60,13 +66,14 @@ workflow AnnotateExternalAF {
                 population = population,
                 contig = contig,
                 ref_prefix = ref_prefix,
-
                 max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
                 min_records_per_shard_step1 = min_records_per_shard_step1,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_override_split_vcf = runtime_override_split_vcf,
-                runtime_attr_modify_vcf = runtime_attr_modify_vcf
+                runtime_attr_modify_vcf = runtime_attr_modify_vcf,
+                runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+                runtime_attr_bedtools_closest = runtime_attr_bedtools_closest
         }
     }
 
@@ -75,20 +82,20 @@ workflow AnnotateExternalAF {
         vcfs = AnnotateExternalAFperContig.annotated_vcf,
         vcfs_idx = AnnotateExternalAFperContig.annotated_vcf_tbi,
         naive = true,
-        outfile_prefix = "~{prefix}.annotated.vcf",
+        outfile_prefix = "~{prefix}.annotated",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_combine_vcfs
     }
 
-     output{
+     output {
         File annotated_vcf = CombineVcfStep2.concat_vcf
         File annotated_vcf_tbi = CombineVcfStep2.concat_vcf_idx
     }
 
 }
 
-task SplitBed{
-    input{
+task SplitBed {
+    input {
         File bed
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
@@ -126,7 +133,7 @@ task SplitBed{
         cat header <(zcat ~{bed} | awk '{if ($6=="BND" || $6=="CTX") print}' ) > ~{prefix}.BND_CTX.bed
     >>>
 
-    output{
+    output {
         File del = "~{prefix}.DEL.bed"
         File dup = "~{prefix}.DUP.bed"
         File ins = "~{prefix}.INS.bed"
@@ -135,8 +142,8 @@ task SplitBed{
     }    
 }
 
-task SplitVcf{
-    input{
+task SplitVcf {
+    input {
         File vcf
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -180,7 +187,7 @@ task SplitVcf{
         cat header <(awk '{if ($5=="BND" || $5=="CTX") print}' ~{prefix}.bed )> ~{prefix}.BND_CTX.bed
     >>>
 
-    output{
+    output {
         File bed = "~{prefix}.bed"
         File del = "~{prefix}.DEL.bed"
         File dup = "~{prefix}.DUP.bed"
@@ -190,8 +197,8 @@ task SplitVcf{
     }
 }
 
-task BedtoolsClosest{
-    input{
+task BedtoolsClosest {
+    input {
         File bed_a
         File bed_b
         String svtype
@@ -230,13 +237,13 @@ task BedtoolsClosest{
         bedtools closest -wo -a <(sort -k1,1 -k2,2n filea.bed) -b <(sort -k1,1 -k2,2n fileb.bed) >> ~{svtype}.bed
     >>>
 
-    output{
+    output {
         File output_bed = "~{svtype}.bed"
     }
 }
 
-task SelectMatchedSVs{
-    input{
+task SelectMatchedSVs {
+    input {
         File input_bed
         String svtype
         Array[String] population
@@ -275,13 +282,13 @@ task SelectMatchedSVs{
             -p ~{pop_list}
     >>>
 
-    output{
+    output {
         File output_comp = "~{prefix}.comparison"
     }    
 }
 
-task SelectMatchedINSs{
-    input{
+task SelectMatchedINSs {
+    input {
         File input_bed
         String svtype
         Array[String] population
@@ -320,13 +327,13 @@ task SelectMatchedINSs{
             -p ~{pop_list}
     >>>
 
-    output{
+    output {
         File output_comp = "~{prefix}.comparison"
     }
 }
 
-task ModifyVcf{
-    input{
+task ModifyVcf {
+    input {
         Array[File] labeled_del
         Array[File] labeled_dup
         Array[File] labeled_ins
@@ -380,7 +387,7 @@ task ModifyVcf{
             else:
                 body[pin[2]]=pin
                 SVID_key.append(pin[2])
-        header.append(['##INFO=<ID='+"~{ref_prefix}"+'_SVID'+',Number=1,Type=Float,Description="Allele frequency (for biallelic sites) or copy-state frequency (for multiallelic sites) of an overlapping event in gnomad.">'])
+        header.append(['##INFO=<ID='+"~{ref_prefix}"+'_SVID'+',Number=1,Type=String,Description="SVID of an overlapping event in gnomad used for external allele frequency annotation.">'])
 
         fin.close()
         fin=open('labeled.bed')
@@ -412,7 +419,7 @@ task ModifyVcf{
         tabix ~{prefix}.annotated.vcf.gz
     >>>
 
-    output{
+    output {
         File annotated_vcf = "~{prefix}.annotated.vcf.gz"
         File annotated_vcf_tbi = "~{prefix}.annotated.vcf.gz.tbi"
     }        

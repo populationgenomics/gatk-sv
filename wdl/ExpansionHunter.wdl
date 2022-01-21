@@ -20,8 +20,15 @@ workflow ExpansionHunter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
-        String docker_file
+        String sample_id
+        File? ped_file
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr
+    }
+
+    parameter_meta {
+        ped_file: "This file is used to extract the sex of the bam_or_cram file."
+        sample_id: "The ped_file needs to be provided as well to determine sample sex. The ID must match the sample ID given in the second column (`Individual ID` column) of the given PED file. This ID will also be used as an output prefix."
     }
 
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
@@ -42,7 +49,9 @@ workflow ExpansionHunter {
             reference_fasta = reference_fasta,
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
-            docker_file = docker_file,
+            sample_id = sample_id,
+            ped_file = ped_file,
+            expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
     }
 
@@ -50,6 +59,7 @@ workflow ExpansionHunter {
         File json = RunExpansionHunter.json
         File vcf = RunExpansionHunter.vcf
         File overlapping_reads = RunExpansionHunter.overlapping_reads
+        File timing = RunExpansionHunter.timing
     }
 }
 
@@ -60,26 +70,50 @@ task RunExpansionHunter {
         File reference_fasta
         File reference_fasta_index
         File variant_catalog
-        String docker_file
+        String sample_id
+        File? ped_file
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
     }
 
-    String output_prefix = "output"
-
     output {
-        File json = "${output_prefix}.json"
-        File vcf = "${output_prefix}.vcf"
-        File overlapping_reads = "${output_prefix}_realigned.bam"
+        File json = "${sample_id}.json"
+        File vcf = "${sample_id}.vcf"
+        File overlapping_reads = "${sample_id}_realigned.bam"
+        File timing = "${sample_id}_timing.tsv"
     }
 
     command <<<
         set -euxo pipefail
 
+        BAM_OR_CRAM_DIR="$(dirname "~{bam_or_cram}")"
+        BAM_OR_CRAM_INDEX_FILENAME="$(basename "~{bam_or_cram_index}")"
+        DEST="$BAM_OR_CRAM_DIR/$BAM_OR_CRAM_INDEX_FILENAME"
+        if [ $DEST != ~{bam_or_cram_index} ]; then
+            mv ~{bam_or_cram_index} $DEST
+        fi
+
+        REF="$(basename "~{reference_fasta}")"
+        mv ~{reference_fasta} $REF
+        mv ~{reference_fasta_index} $REF.fai
+
+        sex=""
+        if ~{defined(ped_file)}; then
+            sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0}}}' < ~{ped_file} )
+            if [ "$sex" = "" ]; then
+                echo "The Sex of the sample defined in the PED file is other than male or female. ExpansionHunter only supports male or female samples."
+                exit 1
+            fi
+        fi
+
         ExpansionHunter \
             --reads ~{bam_or_cram} \
-            --reference ~{reference_fasta} \
+            --reference $REF \
             --variant-catalog ~{variant_catalog} \
-            --output-prefix ~{output_prefix}
+            --output-prefix ~{sample_id} \
+            --cache-mates \
+            --record-timing \
+            $sex
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
@@ -99,7 +133,7 @@ task RunExpansionHunter {
         runtime_attr_str_profile_default])
 
     runtime {
-        docker: docker_file
+        docker: expansion_hunter_docker
         cpu: runtime_attr.cpu_cores
         memory: runtime_attr.mem_gb + " GiB"
         disks: "local-disk " + runtime_attr.disk_gb + " HDD"
