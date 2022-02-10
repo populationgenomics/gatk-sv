@@ -1,0 +1,43 @@
+{
+    "GatherSampleEvidenceBatch.bam_or_cram_files": [
+      "gs://cpg-acute-care-test/cram/CPG199943.cram", 
+      "gs://cpg-acute-care-test/cram/CPG199869.cram",
+      "gs://cpg-acute-care-test/cram/CPG199877.cram",
+      "gs://cpg-acute-care-test/cram/CPG199885.cram",
+      "gs://cpg-acute-care-test/cram/CPG199893.cram",
+      "gs://cpg-acute-care-test/cram/CPG199901.cram",
+      "gs://cpg-acute-care-test/cram/CPG199919.cram",
+      "gs://cpg-acute-care-test/cram/CPG199927.cram",
+      "gs://cpg-acute-care-test/cram/CPG199935.cram"
+    ],
+    "GatherSampleEvidenceBatch.sample_ids": [
+      "CPG199943", 
+      "CPG199869",
+      "CPG199877",
+      "CPG199885",
+      "CPG199893",
+      "CPG199901",
+      "CPG199919",
+      "CPG199927",
+      "CPG199935"
+    ],
+    "GatherSampleEvidenceBatch.sv_pipeline_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/sv-pipeline:eph_mediancov_mem_and_names-3f0c76d",
+    "GatherSampleEvidenceBatch.samtools_cloud_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/samtools-cloud:mw-gnomad-02-6a66c96",
+    "GatherSampleEvidenceBatch.genomes_in_the_cloud_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/genomes-in-the-cloud:2.3.2-1510681135",
+    "GatherSampleEvidenceBatch.gatk_docker":  "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/gatk:4.1.8.1",
+    "GatherSampleEvidenceBatch.wham_docker":  "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/wham:8645aa",
+    "GatherSampleEvidenceBatch.manta_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/manta:8645aa",
+    "GatherSampleEvidenceBatch.sv_base_mini_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/sv-base-mini:lint-24b9cda",
+    "GatherSampleEvidenceBatch.cloud_sdk_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/cloud-sdk",
+    "GatherSampleEvidenceBatch.manta_region_bed": "gs://cpg-reference/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
+    "GatherSampleEvidenceBatch.preprocessed_intervals": "gs://cpg-reference/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
+    "GatherSampleEvidenceBatch.reference_index":"gs://cpg-reference/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+    "GatherSampleEvidenceBatch.reference_dict": "gs://cpg-reference/hg38/v0/Homo_sapiens_assembly38.dict",
+    "GatherSampleEvidenceBatch.primary_contigs_list": "gs://cpg-reference/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+    "GatherSampleEvidenceBatch.primary_contigs_fai": "gs://cpg-reference/hg38/v0/sv-resources/resources/v1/contig.fai",
+    "GatherSampleEvidenceBatch.reference_fasta": "gs://cpg-reference/hg38/v0/Homo_sapiens_assembly38.fasta",
+    "GatherSampleEvidenceBatch.wham_include_list_bed_file": "gs://cpg-reference/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
+    "GatherSampleEvidenceBatch.run_module_metrics": "False"
+  }
+  
+  
