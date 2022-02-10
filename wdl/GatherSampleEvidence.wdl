@@ -117,9 +117,11 @@ workflow GatherSampleEvidence {
     File? NONE_FILE_
   }
 
-  Boolean run_delly = defined(delly_docker)
+  # Boolean run_delly = defined(delly_docker)
+  Boolean run_delly = false 
   Boolean run_manta = defined(manta_docker)
-  Boolean run_melt = defined(melt_docker)
+  # Boolean run_melt = defined(melt_docker)
+  Boolean run_melt = false
   Boolean run_wham = defined(wham_docker)
 
   Boolean is_bam_ = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
