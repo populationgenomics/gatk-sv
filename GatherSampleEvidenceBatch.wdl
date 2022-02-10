@@ -1,7 +1,7 @@
 version 1.0
 
-import "GatherSampleEvidence.wdl" as sampleevidence
-import "TestUtils.wdl" as tu
+import "wdl/GatherSampleEvidence.wdl" as sampleevidence
+import "wdl/TestUtils.wdl" as tu
 
 workflow GatherSampleEvidenceBatch {
   input {
