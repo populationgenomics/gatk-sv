@@ -187,7 +187,7 @@ task SRTest {
 
   parameter_meta {
     splitfile: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

@@ -186,7 +186,7 @@ task PETest {
 
   parameter_meta {
     discfile: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

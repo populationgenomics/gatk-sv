@@ -138,7 +138,7 @@ task RDTest {
 
   parameter_meta {
     coveragefile: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

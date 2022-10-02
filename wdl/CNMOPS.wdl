@@ -308,7 +308,7 @@ task CNSampleNormal {
 
   parameter_meta {
     bincov_matrix: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 
