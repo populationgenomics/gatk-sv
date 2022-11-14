@@ -164,7 +164,7 @@ task ExcludeIntervalsByEndpoints {
             | awk '$1!="."' \
             | sort -k1,1V -k2,2n -k3,3n \
             > ends.bed
-        bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b ~{intervals} | cut -f4 | sort | uniq \
+        bedtools intersect -u -wa -g genome.file -wa -a ends.bed -b ~{intervals} | cut -f4 | sort | uniq \
             > excluded_vids.list
         bcftools view -i '%ID!=@excluded_vids.list' ~{vcf} -Oz -o ~{output_prefix}.vcf.gz
         tabix ~{output_prefix}.vcf.gz
@@ -210,7 +210,7 @@ task ExcludeIntervalsByIntervalOverlap {
         set -euo pipefail
         cut -f1,2 ~{reference_fasta_fai} > genome.file
         bcftools query -f '%CHROM\t%POS\t%END\t%ID\t%SVTYPE\n' ~{vcf} > variants.bed
-        bedtools coverage -sorted -g genome.file -f ~{overlap_fraction} -a variants.bed -b ~{intervals} \
+        bedtools coverage -g genome.file -f ~{overlap_fraction} -a variants.bed -b ~{intervals} \
             | awk -F"\t" '$6>0' \
             | cut -f4 \
             > excluded_vids.list

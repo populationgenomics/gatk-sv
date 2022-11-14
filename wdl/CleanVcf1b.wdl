@@ -261,7 +261,7 @@ task BedtoolsIntersect {
 
     command <<<
         set -euo pipefail
-        bedtools intersect -sorted -wa -wb -a <(zcat ~{bed}) -b <(zcat ~{bed}) \
+        bedtools intersect -wa -wb -a <(zcat ~{bed}) -b <(zcat ~{bed}) \
             | awk -F'\t' -v OFS='\t' '$4!=$10 && $5!=$11' \
             | gzip -1 \
             > ~{prefix}.bed.gz
