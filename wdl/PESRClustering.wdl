@@ -179,7 +179,7 @@ task PreparePESRVcfs {
         | awk '$1!="."' \
         | sort -k1,1V -k2,2n -k3,3n \
         > ends.bed
-      bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b ~{exclude_intervals} | cut -f4 | sort | uniq \
+      bedtools intersect -u -wa -g genome.file -wa -a ends.bed -b ~{exclude_intervals} | cut -f4 | sort | uniq \
         > excluded_vids.list
       bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size})' tmp2.vcf.gz \
         -Oz -o out/$SAMPLE_NUM.$NAME.vcf.gz
