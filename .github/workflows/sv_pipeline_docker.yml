@@ -85,26 +85,9 @@ jobs:
       - name: Compose Image Tag
         id: image_tag
         # This step composes a tag to be used for all the images created by
-        # the build_docker.py script. The tag follows the following template:
-        #
-        #   DATE-RELEAST_TAG-HEAD_SHA_8
-        #
-        # where 'DATE' is YYYY-MM-DD extracted from the time stamp of the last
-        # commit on the feature branch (HEAD), `RELEASE_TAG` is extracted from
-        # the latest [pre-]release on Github, and the 'HEAD_SHA_8' is the first
-        # eight letters of the SHA of the last commit on the feature branch (HEAD).
-        run: |          
-          # Extract the time stamp of COMMIT_SHA in YYYY-MM-DD format.
-          # See git-show documentation available at:
-          # http://schacon.github.io/git/git-show
-          DATE=$(git show -s --format=%ad --date=format:'%Y-%m-%d' $COMMIT_SHA)
-          
-          # Get latest [pre-]release tag.
-          RELEASE_TAG=$(jq -r '.[0] | .tag_name' <<< $(curl --silent https://api.github.com/repos/broadinstitute/gatk-sv/releases))
-          
-          COMMIT_SHA=${{ steps.commit_sha.outputs.HEAD_SHA }}
-          
-          IMAGE_TAG=$DATE-$RELEASE_TAG-${COMMIT_SHA::8}
+        # The tag is extracted from the bump2version monitored version.txt file
+        run: |
+          IMAGE_TAG=$(cat version.txt)
           echo "::debug::Image tag: $IMAGE_TAG"
           echo "::set-output name=IMAGE_TAG::$IMAGE_TAG"
 
@@ -159,15 +142,13 @@ jobs:
         python-version: ['3.8']
     env:
       # DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
-      DOCKERS_GCP: "./inputs/values/dockers.json"
+      DOCKERS_GCP: "gs://cpg-config/templates/images/gatk-sv/gcp_dockers.toml"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
           # See the comment on build_args_job.
           fetch-depth: 0
-          # Authenticates git using the bot's access token.
-          token: ${{ secrets.BOT_PAT }}
 
       - name: Setup Python
         uses: actions/setup-python@v2
@@ -240,13 +221,3 @@ jobs:
 #            --output-json $DOCKERS_AZURE \
 #            --prune-after-each-image \
 #            --disable-git-protect
-#
-#      - name: Commit Changes to dockers_*.json
-#        if: steps.build_and_publish.outputs.CHANGED
-#        run: |
-#          COMMIT_SHA=${{ needs.build_args_job.outputs.head_sha }}
-#          git config --global user.name 'gatk-sv-bot'
-#          git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
-#          git commit $DOCKERS_AZURE $DOCKERS_GCP -m "Update docker images list, triggered by "${COMMIT_SHA::8}
-#          git pull --rebase origin main
-#          git push
