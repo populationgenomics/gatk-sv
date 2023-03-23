@@ -246,6 +246,11 @@ class ProjectBuilder:
         for target, image in self.current_docker_images.items():
             if image not in dockers_json_images:
                 if target in new_dockers_json:
+                    print('point of failure')
+                    print(target, image)
+                    print(output_json)
+                    print(dockers_json_images)
+                    print(new_dockers_json)
                     # this requires coincidences bordering on malicious, but check and throw a sensible error message
                     raise ValueError(
                         f"Unable to update {output_json} because {image} is not used in input dockers json but its"
