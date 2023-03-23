@@ -117,7 +117,7 @@ jobs:
         # install cloudpathlib so we can write to our infra
         run: |
           python -m pip install --upgrade pip
-          pip install cloudpathlib[gcp,az] termcolor toml
+          pip install cloudpathlib[gs,az] termcolor toml
 
       - name: Run build_docker.py
         # temporarily regenerate all images
@@ -164,7 +164,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install cloudpathlib[gcp,az] termcolor toml
+          pip install cloudpathlib[gs,az] termcolor toml
 
       - name: Setup gcloud CLI
         uses: google-github-actions/setup-gcloud@v0.3.0
