@@ -147,8 +147,8 @@ jobs:
         python-version: ['3.8']
     env:
       # DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
-       DOCKERS_GCP: "./inputs/values/dockers.json"
-      # DOCKERS_GCP: "gs://cpg-config/templates/images/gatk-sv/gcp_images.toml"
+#       DOCKERS_GCP: "./inputs/values/dockers.json"
+       DOCKERS_GCP: "gs://cpg-config/templates/images/gatk-sv/gcp_images.toml"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
