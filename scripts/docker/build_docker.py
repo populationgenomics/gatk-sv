@@ -4,14 +4,16 @@ import argparse
 import sys
 import os
 import fnmatch
-import json
 import time
 import tempfile
+import toml
 import shutil
 import pprint
 import subprocess
-from typing import Union, Iterable, Mapping, Optional, List, Tuple, Set, Dict
+from typing import Union, Iterable, Mapping, Optional, List, Tuple, Set
 from types import MappingProxyType
+
+from cloudpathlib.anypath import to_anypath
 
 program_operation_description = """
 The high-level view of how build_docker.py works:
@@ -27,30 +29,26 @@ The high-level view of how build_docker.py works:
        chain of dependencies (presumably this is most useful as part
        of a debugging process where several Dockerfiles are being
        tweaked).
-    3) Load current default docker images from dockers json specified
-       by --input-json
+    3) Load current default docker images specified by --input-toml
     4) For each image that must be built:
-        a) Actually build the image. If it depends on other images,
-           supply the dependent image tag as specified by the input
-           json.
+        a) Build the image. If it depends on other images, supply 
+           the dependent image tag as specified by the input toml.
         b) If there is a remote image repo specified, push the newly
-           built image to that repo and update the dockers json with
-           the remote image.
-        c) If there is no remote image repo, update the dockers json
-           with the local image.
+           built image to that repo and update the toml with the 
+           remote image.
+        c) If there is no remote image repo, update the toml with the 
+           local image.
     5) If a remote image repo is specified and there are pre-existing
-       local images in the dockers json that were not built this run,
-       push them now and update the dockers json with their remote
-       name.
-    6) Write out the updated dockers json to the file specified by
-       --output-json
+       local images in the toml that were not built this run, push 
+       them now and update the toml with their remote name.
+    6) Write the updated toml to the file specified by --output-toml
 
 When you run the program normally, it prints statements describing its
-actions at each step, including printing out changes to dockers.json.
+actions at each step, including printing out changes to images.toml.
 When you run it with --dry-run it does all the same things, except it:
     a) never builds an image
     b) never pushes an image
-    c) doesn't actually alter the output dockers json
+    c) doesn't actually alter the output toml
 Instead it prints the changes that it would make if you ran without
 --dry-run.
 """
@@ -59,7 +57,6 @@ Instead it prints the changes that it would make if you ran without
 class Paths:
     this_script_folder = os.path.dirname(os.path.abspath(__file__))
     gatk_sv_path = os.path.dirname(os.path.dirname(this_script_folder))
-    dockers_json_path = os.path.join(gatk_sv_path, "inputs", "values", "dockers.json")
     dev_null = "/dev/null"
 
 
@@ -190,15 +187,17 @@ class ProjectBuilder:
         self.launch_script_path = launch_script_path
         self.working_dir = None
         self.build_priority = {}
-        self.dockers_json = ProjectBuilder.load_json(self.project_arguments.input_json)
+        # load
+        self.images_toml = ProjectBuilder.load_toml(self.project_arguments.input_toml)['images']
         self.current_docker_images = {}
 
     @staticmethod
-    def load_json(json_file: str) -> Dict[str, str]:
-        if not os.path.isfile(json_file):
-            return {}
-        with open(json_file, "r") as f_in:
-            return json.load(f_in)
+    def load_toml(toml_file: str) -> dict:
+        toml_anypath = to_anypath(toml_file)
+        if not toml_anypath.exists():
+            return {'images': {}}
+        with to_anypath(toml_file).open() as file_in:
+            return toml.load(file_in)
 
     @staticmethod
     def get_target_from_image(docker_image: str) -> str:
@@ -218,7 +217,7 @@ class ProjectBuilder:
     def get_current_image(self, target: str, throw_error_on_no_image: bool = True) -> str:
         current_image = self.current_docker_images.get(target, None)
         if current_image is None:
-            for image in self.dockers_json.values():
+            for image in self.images_toml.values():
                 if ProjectBuilder.get_target_from_image(image) == target:
                     self.current_docker_images[target] = image
                     current_image = image
@@ -229,45 +228,42 @@ class ProjectBuilder:
             )
         return current_image
 
-    def update_dockers_json(self):
-        output_json = self.project_arguments.output_json
-        if output_json is None or not output_json or output_json == Paths.dev_null:
+    def update_images_toml(self):
+        output_toml = self.project_arguments.output_toml
+        if output_toml is None or not output_toml or output_toml == Paths.dev_null:
             return  # no update is desired
-        new_dockers_json = {
+        new_dockers_toml = {
             json_key: (self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
                        if ProjectBuilder.get_target_from_image(docker_image) in self.dependencies
                        else docker_image)
 
-            for json_key, docker_image in self.dockers_json.items()
+            for json_key, docker_image in self.images_toml.items()
         }
         # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
         # of what tag is current
-        dockers_json_images = set(new_dockers_json.values())
+        dockers_toml_images = set(new_dockers_toml.values())
         for target, image in self.current_docker_images.items():
-            if image not in dockers_json_images:
-                if target in new_dockers_json:
-                    print('point of failure')
-                    print(target, image)
-                    print(output_json)
-                    print(dockers_json_images)
-                    print(new_dockers_json)
+            if image not in dockers_toml_images:
+                if target in new_dockers_toml:
                     # this requires coincidences bordering on malicious, but check and throw a sensible error message
                     raise ValueError(
-                        f"Unable to update {output_json} because {image} is not used in input dockers json but its"
+                        f"Unable to update {output_toml} because {image} is not used in input dockers json but its"
                         f"target name {target} conflicts with an existing key."
                     )
-                new_dockers_json[target] = image
+                new_dockers_toml[target] = image
 
-        old_dockers_json = ProjectBuilder.load_json(output_json)
+        old_dockers_toml = ProjectBuilder.load_toml(output_toml)
 
-        if new_dockers_json != old_dockers_json:
-            print(json.dumps(new_dockers_json, indent=2))
+        if new_dockers_toml != old_dockers_toml:
+            # plug in the top level index
+            new_dockers_toml = {'images': new_dockers_toml}
+            print(toml.dumps(new_dockers_toml))
             # update dockers.json with the new data
             if self.project_arguments.dry_run:
-                print(f"Write output dockers json at {output_json}")
+                print(f"Write output dockers json at {output_toml}")
             else:
-                with open(output_json, "w") as f_out:
-                    json.dump(new_dockers_json, f_out, indent=2)
+                with open(output_toml, "w") as f_out:
+                    toml.dump(new_dockers_toml, f_out)
 
     def get_build_priority(self, target_name: str) -> (int, str):
         """
@@ -447,7 +443,7 @@ class ProjectBuilder:
 
             build_completed = True
         finally:
-            self.update_dockers_json()
+            self.update_images_toml()
             if not self.project_arguments.skip_cleanup:
                 self.cleanup(possible_tmp_dir_path, build_completed)
 
@@ -685,15 +681,15 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
 
     docker_remote_args_group.add_argument(
-        "--input-json", type=str, default=Paths.dockers_json_path,
-        help="Path to dockers.json to use as input. This file serves as a store for "
+        "--input-json", type=str, required=True,
+        help="Path to images.toml to use as input. This file serves as a store for "
              "both the default docker image to use for various gatk-sv WDLs, and for "
              "the most up-to-date docker tag for each docker image."
     )
 
     docker_remote_args_group.add_argument(
-        "--output-json", type=str, default=Paths.dockers_json_path,
-        help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn off updates."
+        "--output-toml", type=str, required=True,
+        help=f"Path to output updated images.toml."
     )
 
     parser.add_argument(
@@ -713,9 +709,8 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
              "Alternatively can specify --base-git-commit/--current-git-commit to automatically determine targets."
     )
 
-    short_git_hash_head = get_command_output("git rev-parse --short HEAD").strip()
     parser.add_argument(
-        "--image-tag", type=str, default=short_git_hash_head,
+        "--image-tag", type=str, required=True,
         help="Tag to be applied to all images being built."
     )
 
@@ -765,8 +760,9 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         sys.exit(0)
     parsed_args = parser.parse_args(args_list[1:])
 
-    if not os.access(parsed_args.input_json, os.R_OK):
-        raise ValueError("--input-json must specify a path to a file with read access.")
+    input_toml_anypath = to_anypath(parsed_args.input_toml)
+    if not input_toml_anypath.exists():
+        raise ValueError("--input-toml must specify an accessible path")
 
     if parsed_args.base_git_commit is None:
         if parsed_args.targets is None:
