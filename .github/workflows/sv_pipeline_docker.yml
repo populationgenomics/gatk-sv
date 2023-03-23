@@ -221,7 +221,7 @@ jobs:
 #            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
 #            --docker-repo ${{ secrets.AZ_CR }} \
 #            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-#            --input-json $DOCKERS_AZURE \
-#            --output-json $DOCKERS_AZURE \
+#            --input-toml $DOCKERS_AZURE \
+#            --output-toml $DOCKERS_AZURE \
 #            --prune-after-each-image \
 #            --disable-git-protect
