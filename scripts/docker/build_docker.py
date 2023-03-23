@@ -672,7 +672,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         "--docker-repo", type=str,
         help="Docker repo to push images to. This will push images that are built "
              "this run of build_docker.py, or that currently have only a local image "
-             "in --input-json."
+             "in --input-toml."
     )
 
     docker_remote_args_group.add_argument(
@@ -681,7 +681,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
 
     docker_remote_args_group.add_argument(
-        "--input-json", type=str, required=True,
+        "--input-toml", type=str, required=True,
         help="Path to images.toml to use as input. This file serves as a store for "
              "both the default docker image to use for various gatk-sv WDLs, and for "
              "the most up-to-date docker tag for each docker image."

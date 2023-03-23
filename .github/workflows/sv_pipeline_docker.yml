@@ -128,8 +128,8 @@ jobs:
             --targets all \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --prune-after-each-image \
-            --input-json $DOCKERS_GCP \
-            --output-json $DOCKERS_GCP \
+            --input-toml $DOCKERS_GCP \
+            --output-toml $DOCKERS_GCP \
             --dry-run
 
   publish_job:
@@ -199,8 +199,8 @@ jobs:
             --targets all \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-            --input-json $DOCKERS_GCP \
-            --output-json $DOCKERS_GCP \
+            --input-toml $DOCKERS_GCP \
+            --output-toml $DOCKERS_GCP \
             --dry-run
           
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
