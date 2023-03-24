@@ -116,6 +116,8 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8']
+    env:
+      DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -137,12 +139,11 @@ jobs:
         run: |
           cd ./scripts/docker/
           python build_docker.py \
-            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-            --prune-after-each-image \
-            --dry-run
+            --input-json $DOCKERS_GCP \
+            --output-json $DOCKERS_GCP \
+            --targets all \
+            --image-tag v0.27.0
 
   publish_job:
     # This job first configures gcloud with the authentication of a
@@ -166,8 +167,6 @@ jobs:
         with:
           # See the comment on build_args_job.
           fetch-depth: 0
-          # Authenticates git using the bot's access token.
-          token: ${{ secrets.BOT_PAT }}
 
       - name: Setup Python
         uses: actions/setup-python@v2
