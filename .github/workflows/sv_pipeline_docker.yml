@@ -116,8 +116,6 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8']
-    env:
-      DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -140,8 +138,6 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --input-json $DOCKERS_GCP \
-            --output-json $DOCKERS_GCP \
             --targets all \
             --image-tag v0.27.0
 
