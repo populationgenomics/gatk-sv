@@ -796,8 +796,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
 
     # if there are uncommitted changes when building from local files, raise exception
     if parsed_args.staging_dir is None and not parsed_args.disable_git_protect:
-        print(os.popen("git status").read())
-        s = os.popen("git status -s | wc -l | tr -d ' ' | tr -d '\n'").read()
+        s = os.popen("git status -s | grep -v 'gha-creds' |  wc -l | tr -d ' ' | tr -d '\n'").read()
         ret = int(s)
         if 0 != ret:
             raise ValueError(
