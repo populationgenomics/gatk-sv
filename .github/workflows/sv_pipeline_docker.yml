@@ -133,6 +133,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install termcolor
 
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v0.3.0
+        with:
+          project_id: cpg-common
+
+      - name: gcloud auth
+        uses: 'google-github-actions/auth@v0'
+        with:
+          # secret needs to be set up for this repo
+          credentials_json: ${{ secrets.GH_IMAGES_DEPLOYER_JSON }}
+
+      - name: Configure Docker using gcloud
+        # This step uses gcloud to configure docker credentials to access GCR
+        # using a service account.
+        # See: https://cloud.google.com/container-registry/docs/advanced-authentication
+        #
+        # The build_docker.py uses the `--squash` flag when building the
+        # images to be pushed to GCR. This flag is only available when
+        # experimental features are enabled, hence the features are enabled
+        # in this flag.
+        run: |
+          gcloud auth configure-docker australia-southeast1-docker.pkg.dev
+          tmp=$(mktemp)
+          sudo jq '.+{experimental:true}' /etc/docker/daemon.json > "$tmp"
+          sudo mv "$tmp" /etc/docker/daemon.json
+          sudo systemctl restart docker.service
+
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
