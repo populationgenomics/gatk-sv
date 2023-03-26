@@ -165,7 +165,7 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --targets all \
+            --targets sv-utils-env sv-utils \
             --image-tag v0.27.0
 
   publish_job:
