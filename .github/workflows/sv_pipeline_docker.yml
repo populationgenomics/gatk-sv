@@ -165,7 +165,8 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --targets sv-utils-env sv-utils \
+            --targets sv-base sv-utils cnmops sv-pipelines \
+            --prune-after-each-image \
             --image-tag v0.27.0
 
   publish_job:
@@ -238,6 +239,7 @@ jobs:
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_GCP \
             --output-json $DOCKERS_GCP \
+            --prune-after-each-image \
             --dry-run
           
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
