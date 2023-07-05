@@ -36,6 +36,7 @@ fi
 join -j 1 <(zcat $pegeno_indiv_file|awk '{print $1"@"$2 "\t" $0}'|sort -k1,1) \
    <(zcat $srgeno_indiv_file|awk '{print $1"@"$2 "\t" $3 "\t" $4 "\t" $5}'|sort -k1,1) \
    |tr ' ' '\t' \
+   |uniq \
    |gzip \
    >PESRall.combined.files.txt.gz
 
@@ -43,6 +44,7 @@ join -j 1 <(zcat $pegeno_indiv_file|awk '{print $1"@"$2 "\t" $0}'|sort -k1,1) \
 join -j 1 -o 1.1 1.2 2.2 <(zcat $pegeno_variants_file |sort -k1,1) \
   <(zcat $srgeno_variants_file|sort -k1,1 ) \
   |tr ' ' '\t' \
+  |uniq \
   |gzip \
   >PESRall.variants.combined.files.txt.gz
 
