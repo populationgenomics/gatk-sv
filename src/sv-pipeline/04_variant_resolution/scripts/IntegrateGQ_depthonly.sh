@@ -25,14 +25,15 @@ tail -n +2 pre.int.bed|awk -F'\t' '{if($5=$10); print}' OFS='\t' >int.bed
 zcat $RD_melted_genotypes \
   |awk '{print $4"@"$5,$4,$5,$6,$7}' OFS='\t' \
   |sort -k1,1 \
+  |uniq \
   |gzip \
   >rd_indiv_geno.txt.gz
     
 
 ##Depth only- Just RD support used for genotype##
 
-awk -F'\t' '{if ($5=="DEL") print $4}' int.bed>depthonly.del.ids.txt
-awk -F'\t' '{if ($5=="DUP") print $4}' int.bed>depthonly.dup.ids.txt
+awk -F'\t' '{if ($5=="DEL") print $4}' int.bed | sort | uniq > depthonly.del.ids.txt
+awk -F'\t' '{if ($5=="DUP") print $4}' int.bed | sort | uniq > depthonly.dup.ids.txt
 
 
 if [ $(cat depthonly.del.ids.txt|wc -l) -gt 0 ] 
