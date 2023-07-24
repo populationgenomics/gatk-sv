@@ -265,7 +265,7 @@ workflow GatherSampleEvidence {
         baseline_wham_vcf = baseline_wham_vcf,
         contig_list = primary_contigs_list,
         contig_index = select_first([primary_contigs_fai]),
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
 
