@@ -307,7 +307,7 @@ task RDTestGenotype {
     Int n_bins
     String prefix
     Boolean generate_melted_genotypes
-    String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_override
   }
 
