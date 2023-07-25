@@ -6,7 +6,7 @@
   "gatk_docker_pesr_override": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/gatk:4.2.6.1-57-g9e03432",
   "genomes_in_the_cloud_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/ubuntu1804",
-  "manta_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/manta:5994670",,,
+  "manta_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/manta:5994670",
   "scramble_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv/scramble:1.0.2",
   "samtools_cloud_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/samtools-cloud:v0.27.0",
   "sv_base_docker": "australia-southeast1-docker.pkg.dev/cpg-common/images/sv-base:v0.27.0",
