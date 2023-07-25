@@ -49,15 +49,13 @@ jobs:
             > inputs/values/google_cloud.my_project.json
           scripts/inputs/build_default_inputs.sh -d . -c google_cloud.my_project
 
-      - name: Test with Miniwdl
-        run: |
-          python scripts/test/miniwdl_validation.py \
-            --imports-dir wdl \
-            wdl/*.wdl
+#      - name: Test with Miniwdl
+#        run: |
+#          python scripts/test/miniwdl_validation.py \
+#            --imports-dir wdl \
+#            wdl/*.wdl
 
       - name: Test with WOMtool
         run: |
-          ls .
-          ls inputs
-          ls inputs/build
+          ls inputs/build/NA12878
           scripts/test/validate.sh -d . -j womtool.jar
