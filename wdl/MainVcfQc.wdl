@@ -71,7 +71,7 @@ workflow MainVcfQc {
 
   Array[String] contigs = transpose(read_tsv(primary_contigs_fai))[0]
 
-  # Restrict to a subset of all samples, if optioned. This can be useful to
+  # Restrict to a subset of all samples, if optioned. This can be useful to 
   # exclude outlier samples, or restrict to males/females on X/Y (for example)
 
   if (defined(list_of_samples_to_include)) {
@@ -141,7 +141,7 @@ workflow MainVcfQc {
 
   # Collect and plot site-level benchmarking vs. external datasets
   if (defined(site_level_comparison_datasets)) {
-    scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets,
+    scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets, 
                                                        [[], []]]) ) {
       # Collect site-level external benchmarking data
       call sitebench.CollectSiteLevelBenchmarking {
@@ -193,7 +193,7 @@ workflow MainVcfQc {
         runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists
     }
   }
-
+  
   # Merge all VID lists into single output directory and tar it
   call TarShardVidLists {
     input:
@@ -203,7 +203,7 @@ workflow MainVcfQc {
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_tar_shard_vid_lists
   }
-
+  
   Int max_gq_ = select_first([max_gq, 99])
   # Plot per-sample stats
   call PlotQcPerSample {
@@ -236,7 +236,7 @@ workflow MainVcfQc {
 
   # Collect and plot per-sample benchmarking vs. external callsets
   if (defined(sample_level_comparison_datasets)) {
-    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets,
+    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets, 
                                                        [[], []]]) ) {
       # Collect per-sample external benchmarking data
       call samplebench.CollectPerSampleBenchmarking {
@@ -327,7 +327,7 @@ task PlotQcVcfWide {
 
   command <<<
     set -eu -o pipefail
-
+    
     # Plot VCF-wide distributions
     /opt/sv-pipeline/scripts/vcf_qc/plot_sv_vcf_distribs.R \
       -N $( cat ~{samples_list} | sort | uniq | wc -l ) \
@@ -426,9 +426,9 @@ task PlotSiteLevelBenchmarking {
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
-  command <<<
+  command <<<  
     set -eu -o pipefail
-
+      
     # Plot benchmarking stats
     /opt/sv-pipeline/scripts/vcf_qc/plotQC.external_benchmarking.helper.sh \
       ~{benchmarking_tarball} \
@@ -480,7 +480,7 @@ task PlotQcPerSample {
 
   command <<<
     set -eu -o pipefail
-
+    
     # Make per-sample directory
     mkdir ~{prefix}_perSample/
 
@@ -549,7 +549,7 @@ task PlotQcPerFamily {
 
   command <<<
     set -eu -o pipefail
-
+    
     # Clean fam file
     /opt/sv-pipeline/scripts/vcf_qc/cleanFamFile.sh \
       ~{samples_list} \
@@ -596,7 +596,7 @@ task PlotQcPerFamily {
         echo -e "NUMBER OF TRIOS DETECTED ( $n_trios ) LESS THAN MAX_TRIOS ( ~{max_trios} ); PROCEEDING WITHOUT DOWNSAMPLING"
         cp ~{prefix}.cleaned.fam cleaned.subset.fam
       fi
-
+      
       # Run family analysis
       echo -e "STARTING FAMILY-BASED ANALYSIS"
       /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
@@ -661,7 +661,7 @@ task PlotPerSampleBenchmarking {
 
   command <<<
     set -eu -o pipefail
-
+    
     # Untar per-sample benchmarking results
     mkdir tmp_untar/
     tar -xvzf ~{per_sample_benchmarking_tarball} \
@@ -684,11 +684,11 @@ task PlotPerSampleBenchmarking {
     else
       cp all_samples.list ~{prefix}.plotted_samples.list
     fi
-
+    
     while read ID; do
       find tmp_untar -name "$ID.*.bed.gz" | xargs -I {} mv {} results/
     done < ~{prefix}.plotted_samples.list
-
+    
     # Plot per-sample benchmarking
     /opt/sv-pipeline/scripts/vcf_qc/plot_perSample_benchmarking.R \
       -c ~{comparison_set_name} \
@@ -750,10 +750,10 @@ task SanitizeOutputs {
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
+  
   command <<<
     set -euxo pipefail
-
+    
     # Prep output directory tree
     mkdir ~{prefix}_SV_VCF_QC_output/
     mkdir ~{prefix}_SV_VCF_QC_output/data/
@@ -822,7 +822,7 @@ task SanitizeOutputs {
     # Process per-sample external benchmarking plots
     if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
       for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
-        bname="$( basename -s '.tar.gz' $tarball_fname )"
+        bname="$( basename -s '.tar.gz' $tarball_fname )" 
         dname="$bname""_per_sample_benchmarking_plots/"
         tar -xzvf $tarball_fname
         cp $bname/main_plots/* \
@@ -849,3 +849,4 @@ task SanitizeOutputs {
     File vcf_qc_tarball = "~{prefix}_SV_VCF_QC_output.tar.gz"
   }
 }
+

@@ -66,9 +66,16 @@ workflow GATKSVPipelineSingleSample {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
+    String sv_pipeline_updates_docker
+    String sv_pipeline_rdtest_docker
+    String sv_pipeline_base_docker
+    String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
     String gatk_docker
+    String? gcnv_gatk_docker
+    String? gatk_docker_pesr_override
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
@@ -637,6 +644,7 @@ workflow GATKSVPipelineSingleSample {
         scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
+        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
@@ -666,6 +674,7 @@ workflow GATKSVPipelineSingleSample {
       run_ploidy = false,
       wgd_scoring_mask=wgd_scoring_mask,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       runtime_attr_qc=runtime_attr_qc,
@@ -762,9 +771,11 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker = gatk_docker,
+      gcnv_gatk_docker=gcnv_gatk_docker,
       condense_counts_docker = condense_counts_docker,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,
@@ -880,7 +891,7 @@ workflow GATKSVPipelineSingleSample {
       pesr_clustering_algorithm=pesr_clustering_algorithm,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
       baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
@@ -888,6 +899,7 @@ workflow GATKSVPipelineSingleSample {
       baseline_melt_vcf=baseline_melt_vcf_cluster_batch,
       gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       java_mem_fraction=java_mem_fraction_cluster_batch,
       runtime_attr_ids_from_vcf_list=runtime_attr_ids_from_vcf_list_cluster_batch,
       runtime_attr_create_ploidy=runtime_attr_create_ploidy_cluster_batch,
@@ -1068,6 +1080,7 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics = run_genotypebatch_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
       runtime_attr_split_vcf=runtime_attr_split_vcf_genotypebatch,
       runtime_attr_merge_counts=runtime_attr_merge_counts,
@@ -1145,8 +1158,14 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics = run_makecohortvcf_metrics,
 
       primary_contigs_list=primary_contigs_list,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+
       linux_docker=linux_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
 
       runtime_overide_get_discfile_size=runtime_overide_get_discfile_size,
@@ -1341,7 +1360,7 @@ workflow GATKSVPipelineSingleSample {
       sample_counts = case_counts_file_,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
@@ -1358,14 +1377,14 @@ workflow GATKSVPipelineSingleSample {
       name=batch,
       metrics=SampleFilterMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_base_docker=sv_pipeline_base_docker
   }
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
       vcf=ResetPESRTGTOverdispersionFilter.out,
       sample_filtering_qc_file=SampleFilterQC.out,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
   }
 
   call annotate.AnnotateVcf {
@@ -1423,7 +1442,7 @@ workflow GATKSVPipelineSingleSample {
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   call utils.RunQC as SingleSampleQC {
@@ -1431,7 +1450,7 @@ workflow GATKSVPipelineSingleSample {
       name = batch,
       metrics = SingleSampleMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   output {

@@ -46,7 +46,6 @@ workflow ClusterPESR {
   call PreparePESRVcfs {
     input:
       vcf_tar=vcf_tar,
-      contig_list=contig_list,
       reference_fasta_fai=reference_fasta_fai,
       exclude_intervals=exclude_intervals,
       exclude_intervals_index=exclude_intervals + ".tbi",
@@ -123,7 +122,6 @@ workflow ClusterPESR {
 task PreparePESRVcfs {
   input {
     File vcf_tar
-    File contig_list
     File reference_fasta_fai
     File exclude_intervals
     File exclude_intervals_index
@@ -144,8 +142,6 @@ task PreparePESRVcfs {
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
   output {
     File out = "~{output_prefix}.tar.gz"

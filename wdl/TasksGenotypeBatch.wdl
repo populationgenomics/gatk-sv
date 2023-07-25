@@ -566,7 +566,7 @@ task AddBatchSamples {
     set -euo pipefail
     /opt/sv-pipeline/04_variant_resolution/scripts/add_batch_samples.py ~{batch_vcf} ~{cohort_vcf} ~{prefix}.vcf
     bgzip ~{prefix}.vcf
-
+  
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -588,7 +588,7 @@ task IntegrateDepthGq {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1,
+    cpu_cores: 1, 
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -607,7 +607,7 @@ task IntegrateDepthGq {
       ~{vcf} \
       ~{RD_melted_genotypes} \
       ~{RD_vargq}
-
+  
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
