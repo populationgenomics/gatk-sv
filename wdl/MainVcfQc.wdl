@@ -30,6 +30,7 @@ workflow MainVcfQc {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
@@ -70,7 +71,7 @@ workflow MainVcfQc {
 
   Array[String] contigs = transpose(read_tsv(primary_contigs_fai))[0]
 
-  # Restrict to a subset of all samples, if optioned. This can be useful to 
+  # Restrict to a subset of all samples, if optioned. This can be useful to
   # exclude outlier samples, or restrict to males/females on X/Y (for example)
 
   if (defined(list_of_samples_to_include)) {
@@ -134,13 +135,13 @@ workflow MainVcfQc {
       vcf_stats=MergeVcfWideStats.merged_bed_file,
       samples_list=CollectQcVcfWide.samples_list[0],
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
   }
 
   # Collect and plot site-level benchmarking vs. external datasets
   if (defined(site_level_comparison_datasets)) {
-    scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets, 
+    scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets,
                                                        [[], []]]) ) {
       # Collect site-level external benchmarking data
       call sitebench.CollectSiteLevelBenchmarking {
@@ -150,7 +151,7 @@ workflow MainVcfQc {
           contigs=contigs,
           benchmark_url=comparison_dataset_info[1],
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
           runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark
@@ -162,7 +163,7 @@ workflow MainVcfQc {
           benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
           tarball_dir_name=CollectSiteLevelBenchmarking.tarball_dir_name,
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_site_level_benchmark_plot
       }
     }
@@ -192,7 +193,7 @@ workflow MainVcfQc {
         runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists
     }
   }
-  
+
   # Merge all VID lists into single output directory and tar it
   call TarShardVidLists {
     input:
@@ -202,7 +203,7 @@ workflow MainVcfQc {
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_tar_shard_vid_lists
   }
-  
+
   Int max_gq_ = select_first([max_gq, 99])
   # Plot per-sample stats
   call PlotQcPerSample {
@@ -213,7 +214,7 @@ workflow MainVcfQc {
       prefix=prefix,
       max_gq=max_gq_,
       downsample_qc_per_sample=downsample_qc_per_sample,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
 
@@ -228,14 +229,14 @@ workflow MainVcfQc {
         per_sample_tarball=TarShardVidLists.vid_lists,
         prefix=prefix,
         max_gq=max_gq_,
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_plot_qc_per_family
     }
   }
 
   # Collect and plot per-sample benchmarking vs. external callsets
   if (defined(sample_level_comparison_datasets)) {
-    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets, 
+    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets,
                                                        [[], []]]) ) {
       # Collect per-sample external benchmarking data
       call samplebench.CollectPerSampleBenchmarking {
@@ -252,6 +253,7 @@ workflow MainVcfQc {
           random_seed=random_seed,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_override_benchmark_samples=runtime_override_benchmark_samples,
           runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
           runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
@@ -264,7 +266,7 @@ workflow MainVcfQc {
           samples_list=CollectQcVcfWide.samples_list[0],
           comparison_set_name=comparison_dataset_info[0],
           prefix=prefix,
-          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_per_sample_benchmark_plot
       }
     }
@@ -301,7 +303,7 @@ task PlotQcVcfWide {
     File vcf_stats
     File samples_list
     String prefix
-    String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -319,13 +321,13 @@ task PlotQcVcfWide {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -eu -o pipefail
-    
+
     # Plot VCF-wide distributions
     /opt/sv-pipeline/scripts/vcf_qc/plot_sv_vcf_distribs.R \
       -N $( cat ~{samples_list} | sort | uniq | wc -l ) \
@@ -402,7 +404,7 @@ task PlotSiteLevelBenchmarking {
     File benchmarking_tarball
     String tarball_dir_name
     String benchmark_name
-    String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -420,13 +422,13 @@ task PlotSiteLevelBenchmarking {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
-  command <<<  
+  command <<<
     set -eu -o pipefail
-      
+
     # Plot benchmarking stats
     /opt/sv-pipeline/scripts/vcf_qc/plotQC.external_benchmarking.helper.sh \
       ~{benchmarking_tarball} \
@@ -453,7 +455,7 @@ task PlotQcPerSample {
     String prefix
     Int max_gq
     Int? downsample_qc_per_sample
-    String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -472,13 +474,13 @@ task PlotQcPerSample {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -eu -o pipefail
-    
+
     # Make per-sample directory
     mkdir ~{prefix}_perSample/
 
@@ -522,7 +524,7 @@ task PlotQcPerFamily {
     Int? random_seed
     String prefix
     Int max_gq
-    String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
   Int random_seed_ = select_first([random_seed, 0])
@@ -541,13 +543,13 @@ task PlotQcPerFamily {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -eu -o pipefail
-    
+
     # Clean fam file
     /opt/sv-pipeline/scripts/vcf_qc/cleanFamFile.sh \
       ~{samples_list} \
@@ -594,7 +596,7 @@ task PlotQcPerFamily {
         echo -e "NUMBER OF TRIOS DETECTED ( $n_trios ) LESS THAN MAX_TRIOS ( ~{max_trios} ); PROCEEDING WITHOUT DOWNSAMPLING"
         cp ~{prefix}.cleaned.fam cleaned.subset.fam
       fi
-      
+
       # Run family analysis
       echo -e "STARTING FAMILY-BASED ANALYSIS"
       /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
@@ -631,7 +633,7 @@ task PlotPerSampleBenchmarking {
     File samples_list
     String comparison_set_name
     String prefix
-    String sv_pipeline_docker
+    String sv_pipeline_qc_docker
     Int? max_samples = 3000
     Int? random_seed
     RuntimeAttr? runtime_attr_override
@@ -653,13 +655,13 @@ task PlotPerSampleBenchmarking {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -eu -o pipefail
-    
+
     # Untar per-sample benchmarking results
     mkdir tmp_untar/
     tar -xvzf ~{per_sample_benchmarking_tarball} \
@@ -682,11 +684,11 @@ task PlotPerSampleBenchmarking {
     else
       cp all_samples.list ~{prefix}.plotted_samples.list
     fi
-    
+
     while read ID; do
       find tmp_untar -name "$ID.*.bed.gz" | xargs -I {} mv {} results/
     done < ~{prefix}.plotted_samples.list
-    
+
     # Plot per-sample benchmarking
     /opt/sv-pipeline/scripts/vcf_qc/plot_perSample_benchmarking.R \
       -c ~{comparison_set_name} \
@@ -748,10 +750,10 @@ task SanitizeOutputs {
     docker: sv_base_mini_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-  
+
   command <<<
     set -euxo pipefail
-    
+
     # Prep output directory tree
     mkdir ~{prefix}_SV_VCF_QC_output/
     mkdir ~{prefix}_SV_VCF_QC_output/data/
@@ -820,7 +822,7 @@ task SanitizeOutputs {
     # Process per-sample external benchmarking plots
     if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
       for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
-        bname="$( basename -s '.tar.gz' $tarball_fname )" 
+        bname="$( basename -s '.tar.gz' $tarball_fname )"
         dname="$bname""_per_sample_benchmarking_plots/"
         tar -xzvf $tarball_fname
         cp $bname/main_plots/* \
@@ -847,4 +849,3 @@ task SanitizeOutputs {
     File vcf_qc_tarball = "~{prefix}_SV_VCF_QC_output.tar.gz"
   }
 }
-
