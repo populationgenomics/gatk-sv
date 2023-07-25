@@ -162,7 +162,7 @@ class ProjectBuilder:
     """
     class to track dependencies, control build and push of entire job
     """
-    github_org = "broadinstitute"
+    github_org = "productionpipelines"
     github_repo = "gatk-sv"
     # mapping from target to its dependencies
     #   each dependency is either None, or a mapping from each dependency name to the docker ARG it is passed via
@@ -171,11 +171,11 @@ class ProjectBuilder:
         "manta": ImageDependencies(
             git_dependencies="dockerfiles/manta/*"
         ),
-        "melt": ImageDependencies(
-            git_dependencies="dockerfiles/melt/*",
-            docker_dependencies={
-                "sv-base": "SVBASE_IMAGE"}
-        ),
+        # "melt": ImageDependencies(
+        #     git_dependencies="dockerfiles/melt/*",
+        #     docker_dependencies={
+        #         "sv-base": "SVBASE_IMAGE"}
+        # ),
         "wham": ImageDependencies(
             git_dependencies="dockerfiles/wham/*",
             docker_dependencies={
@@ -619,9 +619,9 @@ class ImageBuilder:  # class for building and pushing a single image
         """
         for _, remote_image in self.remote_images:
             # do not push images with very restrictive licenses
-            if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
+            if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("australia-"):
                 print_colored(
-                    f"Refusing to push non-public image {self.name} to non us.grc.io repo at {remote_image}",
+                    f"Refusing to push non-public image {self.name} to non 'australia-' repo at {remote_image}",
                     Colors.RED
                 )
                 continue
