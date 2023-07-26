@@ -132,11 +132,10 @@ jobs:
         run: |
           cd ./scripts/docker/
           python build_docker.py \
-            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
+            --targets wham str sv-pipeline-virtual-env sv-pipeline sv-utils \
             --prune-after-each-image \
+            --image-tag v0.28.1 \
             --dry-run
 
   publish_job:
@@ -197,10 +196,10 @@ jobs:
         id: build_and_publish
         run: |
           python ./scripts/docker/build_docker.py \
-            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
-            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
-            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
+            --targets wham str sv-pipeline-virtual-env sv-pipeline sv-utils \
+            --prune-after-each-image \
+            --image-tag v0.28.1 \
             --input-json $DOCKERS_GCP \
             --output-json $DOCKERS_GCP
           
