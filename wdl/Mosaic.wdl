@@ -31,6 +31,7 @@ workflow MosaicManualCheck{
     
     String sv_pipeline_docker
     String sv_base_mini_docker
+    String sv_pipeline_rdtest_docker
 
     RuntimeAttr? runtime_attr_concat_depth_bed
     RuntimeAttr? runtime_attr_concat_pesr_bed
@@ -65,7 +66,8 @@ workflow MosaicManualCheck{
         coverage_file_idx=coverage_file_idxs[i],
         fam_file=fam_file,
         median_file=median_files[i],
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
         
     }
   }
@@ -87,7 +89,8 @@ workflow MosaicManualCheck{
         coverage_file_idx=coverage_file_idxs[i],
         fam_file=fam_file,
         median_file=median_files[i],
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
     }
   }
 

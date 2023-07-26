@@ -11,6 +11,7 @@ workflow HailMerge {
     Boolean? reset_cnv_gts
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     RuntimeAttr? runtime_override_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
@@ -34,7 +35,7 @@ workflow HailMerge {
       vcfs = [select_first([Preconcat.concat_vcf, vcfs[0]])],
       prefix = prefix,
       gcs_project = select_first([gcs_project]),
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       runtime_attr_override=runtime_override_hail_merge
   }
 
@@ -60,7 +61,7 @@ task HailMergeTask {
     String prefix
     String gcs_project
     String region = "us-central1"
-    String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -87,7 +88,7 @@ task HailMergeTask {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_hail_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 

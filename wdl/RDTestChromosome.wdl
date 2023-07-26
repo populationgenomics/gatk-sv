@@ -22,6 +22,7 @@ workflow RDTestChromosome {
     File ref_dict
 
     String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
     String linux_docker
     RuntimeAttr? runtime_attr_rdtest
     RuntimeAttr? runtime_attr_split_rd_vcf
@@ -56,7 +57,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
-          sv_pipeline_docker = sv_pipeline_docker,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
 
@@ -71,7 +72,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
-          sv_pipeline_docker = sv_pipeline_docker,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
 
@@ -99,7 +100,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
-          sv_pipeline_docker = sv_pipeline_docker,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
     }
@@ -131,7 +132,7 @@ task RDTest {
     File ref_dict
     String prefix
     String flags
-    String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -195,7 +196,7 @@ task RDTest {
     memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_rdtest_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

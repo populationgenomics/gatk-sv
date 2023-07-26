@@ -29,6 +29,7 @@ workflow GenotypePESRPart1 {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
 
     # Runtime attributes
     RuntimeAttr? runtime_attr_split_vcf
@@ -70,6 +71,7 @@ workflow GenotypePESRPart1 {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
+      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_training_bed = runtime_attr_training_bed,
       runtime_attr_genotype_train = runtime_attr_genotype_train,
       runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,
@@ -95,6 +97,7 @@ workflow GenotypePESRPart1 {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
+      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_split_vcf = runtime_attr_split_vcf,
       runtime_attr_make_batch_bed = runtime_attr_make_batch_bed,
       runtime_attr_merge_counts = runtime_attr_merge_counts,
@@ -118,6 +121,7 @@ workflow GenotypePESRPart1 {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
+      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_split_vcf = runtime_attr_split_vcf,
       runtime_attr_merge_counts = runtime_attr_merge_counts,
       runtime_attr_count_sr = runtime_attr_count_sr,
