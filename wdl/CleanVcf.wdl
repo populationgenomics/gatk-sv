@@ -1,6 +1,7 @@
 version 1.0
 
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
+import "TasksClusterBatch.wdl" as TasksCluster
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
 import "MakeCohortVcfMetrics.wdl" as metrics
@@ -12,7 +13,7 @@ workflow CleanVcf {
     Array[File] complex_genotype_vcfs
     Array[File] complex_resolve_bothside_pass_lists
     Array[File] complex_resolve_background_fail_lists
-    File merged_ped_file
+    File ped_file
 
     File contig_list
     File allosome_fai
@@ -34,6 +35,7 @@ workflow CleanVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -46,13 +48,15 @@ workflow CleanVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
+    String sv_pipeline_updates_docker
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
-    RuntimeAttr? runtime_override_fix_bad_ends
+    RuntimeAttr? runtime_attr_create_ploidy
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -65,6 +69,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format
 
     # Clean vcf 1b
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
@@ -95,6 +100,18 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
   }
 
+  call TasksCluster.CreatePloidyTableFromPed {
+    input:
+      ped_file=ped_file,
+      contig_list=contig_list,
+      retain_female_chr_y=false,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      output_prefix="~{cohort_name}.ploidy",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_create_ploidy
+  }
+
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -105,7 +122,7 @@ workflow CleanVcf {
         vcf=complex_genotype_vcfs[i],
         contig=contig,
         background_list=complex_resolve_background_fail_lists[i],
-        ped_file=merged_ped_file,
+        ped_file=ped_file,
         bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
         allosome_fai=allosome_fai,
         prefix="~{cohort_name}.~{contig}",
@@ -118,11 +135,14 @@ workflow CleanVcf {
         gcs_project=gcs_project,
         clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
         clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
+        ploidy_table=CreatePloidyTableFromPed.out,
         chr_x=chr_x,
         chr_y=chr_y,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
         runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
         runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
@@ -154,7 +174,7 @@ workflow CleanVcf {
         runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
         runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
         runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
-        runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+        runtime_attr_format=runtime_attr_format,
     }
   }
 
@@ -167,6 +187,7 @@ workflow CleanVcf {
         reset_cnv_gts=true,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_override_preconcat_clean_final,
         runtime_override_hail_merge=runtime_override_hail_merge_clean_final,
         runtime_override_fix_header=runtime_override_fix_header_clean_final
@@ -201,7 +222,7 @@ workflow CleanVcf {
         baseline_cleaned_vcf = baseline_cleaned_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
         sv_base_mini_docker = sv_base_mini_docker
     }
   }

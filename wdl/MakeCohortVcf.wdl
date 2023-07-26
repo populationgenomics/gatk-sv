@@ -69,6 +69,7 @@ workflow MakeCohortVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -78,6 +79,10 @@ workflow MakeCohortVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
+    String sv_pipeline_updates_docker
+    String sv_pipeline_rdtest_docker
+    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_overide_get_discfile_size
@@ -165,7 +170,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -177,6 +181,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_clean
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -248,8 +253,9 @@ workflow MakeCohortVcf {
       empty_file=empty_file,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list=runtime_override_update_sr_list_cluster,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
@@ -289,9 +295,10 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       max_shard_size=max_shard_size_resolve,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
@@ -333,7 +340,7 @@ workflow MakeCohortVcf {
       complex_resolve_vcfs=ResolveComplexVariants.complex_resolve_vcfs,
       complex_resolve_vcf_indexes=ResolveComplexVariants.complex_resolve_vcf_indexes,
       depth_vcfs=depth_vcfs,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       bincov_files=bincov_files,
       depth_gt_rd_sep_files=depth_gt_rd_sep_files,
       median_coverage_files=median_coverage_files,
@@ -342,7 +349,10 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
       runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -365,7 +375,7 @@ workflow MakeCohortVcf {
       complex_genotype_vcfs=GenotypeComplexVariants.complex_genotype_vcfs,
       complex_resolve_bothside_pass_lists=ResolveComplexVariants.complex_resolve_bothside_pass_lists,
       complex_resolve_background_fail_lists=ResolveComplexVariants.complex_resolve_background_fail_lists,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
       chr_x=chr_x,
@@ -388,9 +398,12 @@ workflow MakeCohortVcf {
       baseline_cleaned_vcf = baseline_cleaned_vcf,
       primary_contigs_list=primary_contigs_list,
       run_module_metrics=run_module_metrics,
-      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
@@ -428,7 +441,7 @@ workflow MakeCohortVcf {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+      runtime_attr_format=runtime_attr_format_clean
   }
 
   call VcfQc.MainVcfQc {
@@ -443,6 +456,7 @@ workflow MakeCohortVcf {
       sample_renaming_tsv=sample_renaming_tsv,
       primary_contigs_fai=contig_list,
       random_seed=random_seed,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,
@@ -483,6 +497,24 @@ workflow MakeCohortVcf {
     File? complex_resolve_vcf_index = ResolveComplexVariants.complex_resolve_merged_vcf_index
     File? complex_genotype_vcf = GenotypeComplexVariants.complex_genotype_merged_vcf
     File? complex_genotype_vcf_index = GenotypeComplexVariants.complex_genotype_merged_vcf_index
+
+    # CombineBatches
+    Array[File] combined_vcfs = CombineBatches.combined_vcfs
+    Array[File] combined_vcf_indexes = CombineBatches.combined_vcf_indexes
+    Array[File] cluster_bothside_pass_lists = CombineBatches.cluster_bothside_pass_lists
+    Array[File] cluster_background_fail_lists = CombineBatches.cluster_background_fail_lists
+
+    # ResolveComplexVariants
+    Array[File] complex_resolve_vcfs = ResolveComplexVariants.complex_resolve_vcfs
+    Array[File] complex_resolve_vcf_indexes = ResolveComplexVariants.complex_resolve_vcf_indexes
+    Array[File] complex_resolve_bothside_pass_lists = ResolveComplexVariants.complex_resolve_bothside_pass_lists
+    Array[File] complex_resolve_background_fail_lists = ResolveComplexVariants.complex_resolve_background_fail_lists
+    Array[File] breakpoint_overlap_dropped_record_vcfs = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcfs
+    Array[File] breakpoint_overlap_dropped_record_vcf_indexes = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcf_indexes
+
+    # GenotypeComplexVariants
+    Array[File] complex_genotype_vcfs = GenotypeComplexVariants.complex_genotype_vcfs
+    Array[File] complex_genotype_vcf_indexes = GenotypeComplexVariants.complex_genotype_vcfs
 
     File? metrics_file_makecohortvcf = CleanVcf.metrics_file_makecohortvcf
   }

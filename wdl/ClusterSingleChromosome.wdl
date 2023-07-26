@@ -28,6 +28,7 @@ workflow ClusterSingleChrom {
     String? gcs_project
 
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for MiniTasks
@@ -86,6 +87,7 @@ workflow ClusterSingleChrom {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_shard_clusters=runtime_override_shard_clusters,
         runtime_override_shard_vids=runtime_override_shard_vids,

@@ -20,6 +20,7 @@ workflow TrainPEGenotyping {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_make_batch_bed
     RuntimeAttr? runtime_attr_count_pe

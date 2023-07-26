@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
+import "TasksMakeCohortVcf.wdl" as tasksmakecohortvcf
 
 workflow GenotypeDepthPart2 {
   input {
@@ -14,14 +15,14 @@ workflow GenotypeDepthPart2 {
     String batch
     File ref_dict
     File medianfile
-    File famfile
     Array[String] samples
 
     File coveragefile
     File? coveragefile_index
 
-    String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_base_mini_docker
+    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_make_subset_vcf
@@ -60,14 +61,13 @@ workflow GenotypeDepthPart2 {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = RD_depth_sepcutoff,
         n_bins = n_RdTest_bins,
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = true,
         ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
@@ -101,14 +101,13 @@ workflow GenotypeDepthPart2 {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = RD_pesr_sepcutoff,
         n_bins = n_RdTest_bins,
         prefix = basename(lt5kb_bed, ".bed"),
         generate_melted_genotypes = true,
         ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
@@ -147,19 +146,18 @@ workflow GenotypeDepthPart2 {
       runtime_attr_override = runtime_attr_merge_regeno_cov_med
   }
 
-  call tasksgenotypebatch.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
+  call tasksmakecohortvcf.ConcatVcfs {
     input:
-      lt5kb_vcfs = AddGenotypesUnder5kb.genotyped_vcf,
-      gt5kb_vcfs = AddGenotypesOver5kb.genotyped_vcf,
-      bca_vcfs = [],
-      batch = batch,
-      evidence_type = "depth",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_vcfs
+      vcfs=flatten([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf]),
+      vcfs_idx=flatten([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index]),
+      allow_overlaps=true,
+      outfile_prefix="~{batch}.genotyped_depth",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_vcfs
   }
   output {
-    File genotyped_vcf = ConcatGenotypedVcfs.genotyped_vcf
-    File genotyped_vcf_index = ConcatGenotypedVcfs.genotyped_vcf_index
+    File genotyped_vcf = ConcatVcfs.concat_vcf
+    File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx
     File regeno_coverage_medians = MergeRegenoCoverageMedians.regeno_coverage_medians
   }
 }
