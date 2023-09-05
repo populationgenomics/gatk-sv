@@ -118,10 +118,10 @@ task PESRBAF_QC {
 
   parameter_meta {
     matrix_file: {
-      localization_optional: true
+      localization_optional: false
     }
     matrix_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 
@@ -198,10 +198,10 @@ task RD_QC {
 
   parameter_meta {
     matrix_file: {
-      localization_optional: true
+      localization_optional: false
     }
     matrix_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

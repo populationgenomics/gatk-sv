@@ -290,10 +290,10 @@ task ResolvePrep {
 
   parameter_meta {
     disc_files: {
-      localization_optional: true
+      localization_optional: false
     }
     disc_files_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

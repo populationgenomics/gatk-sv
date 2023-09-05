@@ -165,10 +165,10 @@ task RdTestGenotypeRegeno {
 
   parameter_meta {
     coveragefile: {
-      localization_optional: true
+      localization_optional: false
     }
     coveragefile_idx: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

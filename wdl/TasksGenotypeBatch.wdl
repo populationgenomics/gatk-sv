@@ -313,10 +313,10 @@ task RDTestGenotype {
 
   parameter_meta {
     coveragefile: {
-      localization_optional: true
+      localization_optional: false
     }
     coveragefile_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 
@@ -402,10 +402,10 @@ task CountPE {
 
   parameter_meta {
     discfile: {
-      localization_optional: true
+      localization_optional: false
     }
     discfile_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 
@@ -477,10 +477,10 @@ task CountSR {
 
   parameter_meta {
     splitfile: {
-      localization_optional: true
+      localization_optional: false
     }
     splitfile_index: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

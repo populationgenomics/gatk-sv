@@ -78,7 +78,7 @@ task BAFTest {
 
   parameter_meta {
     baf_metrics: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 

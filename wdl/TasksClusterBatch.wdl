@@ -52,7 +52,7 @@ task SVCluster {
 
     parameter_meta {
         vcfs: {
-                  localization_optional: true
+                  localization_optional: false
               }
     }
 

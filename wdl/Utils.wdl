@@ -493,7 +493,7 @@ task GetVcfSize {
 
     parameter_meta {
         vcf: {
-          localization_optional: true
+          localization_optional: false
         }
     }
 

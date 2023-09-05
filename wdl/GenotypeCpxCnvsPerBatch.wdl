@@ -197,7 +197,7 @@ task RdTestGenotype {
 
   parameter_meta {
     coverage_file: {
-      localization_optional: true
+      localization_optional: false
     }
   }
 
